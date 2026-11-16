@@ -7,7 +7,7 @@ import java.io.*;
 import java.net.*;
 
 public class RobotService extends Service {
-    static final int PORT = 8080;
+    static final int PORT = 8080;   // ถ้าเคยเปลี่ยนพอร์ต ให้แก้เลขตรงนี้ให้เหมือนเดิม
     volatile boolean running = false;
     ServerSocket ss;
 
@@ -44,6 +44,10 @@ public class RobotService extends Service {
                 String floor = u.getQueryParameter("floor");
                 body = acc == null ? "{\"ok\":false,\"msg\":\"Accessibility not enabled\"}"
                     : "{\"ok\":true,\"msg\":\"" + acc.go(this, point, floor) + "\"}";
+            } else if (p.equals("/points")) {
+                body = acc == null ? "{\"ok\":false,\"msg\":\"Accessibility not enabled\"}" : acc.points(this);
+            } else if (p.equals("/ping")) {
+                body = "{\"ok\":true,\"acc\":" + (acc != null) + "}";
             } else if (p.equals("/dump")) {
                 type = "text/plain";
                 body = acc == null ? "Accessibility not enabled" : acc.dump();
@@ -60,14 +64,7 @@ public class RobotService extends Service {
     }
 
     static final String PAGE = "<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'>"
-        + "<title>Keenon Remote</title><style>body{font-family:sans-serif;margin:30px}"
-        + "button{font-size:32px;width:120px;height:90px;margin:8px;border-radius:12px;border:0;background:#2b7de9;color:#fff}"
-        + "#r{margin-top:20px;font-size:18px}</style>"
-        + "<h2>สั่ง AMR ไปจุดที่ต้องการ</h2>ชั้น: <input id=f value='ชั้น 1' style='font-size:18px'><br><br>"
-        + "<button onclick=go('A')>A</button><button onclick=go('B')>B</button>"
-        + "<button onclick=go('C')>C</button><button onclick=go('D')>D</button>"
-        + "<div id=r></div><p><a href=/dump target=_blank>dump หน้าจอ (ไว้ debug)</a></p>"
-        + "<script>function go(p){var r=document.getElementById('r');r.textContent='กำลังสั่งไปจุด '+p+' ...';"
-        + "fetch('/go?point='+p+'&floor='+encodeURIComponent(document.getElementById('f').value))"
-        + ".then(x=>x.json()).then(j=>r.textContent=p+': '+j.msg).catch(e=>r.textContent='error '+e)}</script>";
+        + "<title>Keenon Remote</title><body style='font-family:sans-serif;margin:30px'>"
+        + "<h2>Keenon Remote พร้อมใช้งาน</h2>ใช้หน้า hub.html ในคอมเพื่อสั่งงาน"
+        + "<p><a href=/dump>dump หน้าจอ</a> | <a href=/points>อ่านรายชื่อจุด</a></p>";
 }
