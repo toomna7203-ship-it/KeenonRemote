@@ -1,0 +1,73 @@
+package com.example.keenonremote;
+import android.app.Service;
+import android.content.Intent;
+import android.net.Uri;
+import android.os.IBinder;
+import java.io.*;
+import java.net.*;
+
+public class RobotService extends Service {
+    static final int PORT = 8080;
+    volatile boolean running = false;
+    ServerSocket ss;
+
+    @Override public IBinder onBind(Intent i) { return null; }
+    @Override public int onStartCommand(Intent i, int f, int id) {
+        if (!running) {
+            running = true;
+            new Thread(new Runnable() { public void run() { loop(); }}).start();
+        }
+        return START_STICKY;
+    }
+    void loop() {
+        try {
+            ss = new ServerSocket(PORT);
+            while (running) {
+                final Socket s = ss.accept();
+                new Thread(new Runnable() { public void run() { handle(s); }}).start();
+            }
+        } catch (Exception e) { running = false; }
+    }
+    void handle(Socket s) {
+        try {
+            BufferedReader r = new BufferedReader(new InputStreamReader(s.getInputStream(), "UTF-8"));
+            String line = r.readLine();
+            String h; while ((h = r.readLine()) != null && h.length() > 0) { }
+            if (line == null) { s.close(); return; }
+            String path = line.split(" ")[1];
+            Uri u = Uri.parse("http://x" + path);
+            String type = "application/json", body;
+            RobotAccessibilityService acc = RobotAccessibilityService.instance;
+            String p = u.getPath() == null ? "/" : u.getPath();
+            if (p.equals("/go")) {
+                String point = u.getQueryParameter("point");
+                String floor = u.getQueryParameter("floor");
+                body = acc == null ? "{\"ok\":false,\"msg\":\"Accessibility not enabled\"}"
+                    : "{\"ok\":true,\"msg\":\"" + acc.go(this, point, floor) + "\"}";
+            } else if (p.equals("/dump")) {
+                type = "text/plain";
+                body = acc == null ? "Accessibility not enabled" : acc.dump();
+            } else {
+                type = "text/html";
+                body = PAGE;
+            }
+            byte[] b = body.getBytes("UTF-8");
+            OutputStream o = s.getOutputStream();
+            o.write(("HTTP/1.1 200 OK\r\nContent-Type: " + type + "; charset=utf-8\r\nContent-Length: " + b.length +
+                "\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n").getBytes());
+            o.write(b); o.flush(); s.close();
+        } catch (Exception e) { try { s.close(); } catch (Exception ignored) { } }
+    }
+
+    static final String PAGE = "<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'>"
+        + "<title>Keenon Remote</title><style>body{font-family:sans-serif;margin:30px}"
+        + "button{font-size:32px;width:120px;height:90px;margin:8px;border-radius:12px;border:0;background:#2b7de9;color:#fff}"
+        + "#r{margin-top:20px;font-size:18px}</style>"
+        + "<h2>สั่ง AMR ไปจุดที่ต้องการ</h2>ชั้น: <input id=f value='ชั้น 1' style='font-size:18px'><br><br>"
+        + "<button onclick=go('A')>A</button><button onclick=go('B')>B</button>"
+        + "<button onclick=go('C')>C</button><button onclick=go('D')>D</button>"
+        + "<div id=r></div><p><a href=/dump target=_blank>dump หน้าจอ (ไว้ debug)</a></p>"
+        + "<script>function go(p){var r=document.getElementById('r');r.textContent='กำลังสั่งไปจุด '+p+' ...';"
+        + "fetch('/go?point='+p+'&floor='+encodeURIComponent(document.getElementById('f').value))"
+        + ".then(x=>x.json()).then(j=>r.textContent=p+': '+j.msg).catch(e=>r.textContent='error '+e)}</script>";
+}
