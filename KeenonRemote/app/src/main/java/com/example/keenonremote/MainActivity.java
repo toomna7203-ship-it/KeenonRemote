@@ -30,7 +30,7 @@ public class MainActivity extends Activity {
         super.onResume();
         int ip = ((WifiManager) getSystemService(WIFI_SERVICE)).getConnectionInfo().getIpAddress();
         String s = (ip & 255) + "." + ((ip >> 8) & 255) + "." + ((ip >> 16) & 255) + "." + ((ip >> 24) & 255);
-        info.setText("เปิดในคอมที่เบราว์เซอร์:\nhttp://" + s + ":8080\n\nAccessibility: " +
+        info.setText("เปิดในคอมที่เบราว์เซอร์:\nhttp://" + s + ":" + RobotService.PORT + "\n\nAccessibility: " +
             (RobotAccessibilityService.instance != null ? "เปิดแล้ว ✔" : "ยังไม่เปิด ✘"));
     }
 }
