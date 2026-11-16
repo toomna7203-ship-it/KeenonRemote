@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Keenon Hub</title>
+<style>
+  :root { --bg:#f5f6f8; --card:#fff; --text:#1c1f26; --muted:#6b7280; --blue:#2b7de9; --green:#22a559; --red:#d64545; --line:#dfe3ea; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14161a; --card:#1e2127; --text:#eceff4; --muted:#9aa3b2; --line:#333a45; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,"Segoe UI",Tahoma,sans-serif; background:var(--bg); color:var(--text); }
+  header { padding:16px 24px 0; }
+  h1 { font-size:20px; margin:0 0 12px; }
+  .robots { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  .chip { display:flex; align-items:center; gap:8px; padding:10px 16px; border-radius:999px; border:2px solid var(--line);
+          background:var(--card); color:var(--text); font-size:16px; cursor:pointer; }
+  .chip.sel { border-color:var(--blue); background:var(--blue); color:#fff; }
+  .dot { width:10px; height:10px; border-radius:50%; background:#999; }
+  .dot.on { background:var(--green); } .dot.off { background:var(--red); } .dot.warn { background:#e0a100; }
+  .tools { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:12px 0 4px; }
+  .tools .lbl { color:var(--muted); font-size:14px; }
+  .tools .sep { width:12px; }
+  input { font-size:16px; padding:8px 10px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--text); }
+  button.small { font-size:14px; padding:8px 12px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--text); cursor:pointer; }
+  main { padding:20px 24px 40px; }
+  .panel { background:var(--card); border-radius:14px; padding:20px; border:1px solid var(--line); }
+  .bar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:16px; }
+  .bar .title { font-size:18px; font-weight:600; margin-right:auto; }
+  .grid { display:flex; flex-wrap:wrap; gap:12px; }
+  .pt { min-width:120px; height:84px; font-size:28px; border:0; border-radius:14px; background:var(--blue); color:#fff; cursor:pointer; padding:0 18px; }
+  .pt:disabled { opacity:.45; cursor:wait; }
+  #msg { margin-top:18px; min-height:24px; color:var(--muted); font-size:16px; }
+  .empty { color:var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>สั่ง AMR Keenon</h1>
+  <div class="robots" id="robots"></div>
+  <div class="tools">
+    <input id="newip" placeholder="IP หุ่น เช่น 192.168.50.137" size="22">
+    <button class="small" id="addrobot">+ เพิ่มหุ่นเอง</button>
+    <span class="sep"></span>
+    <span class="lbl">ค้นหาในวง</span>
+    <input id="subnet" size="12" title="3 ชุดแรกของ IP เช่น 192.168.50">
+    <span class="lbl">พอร์ต</span>
+    <input id="port" size="5">
+    <button class="small" id="find">🔍 ค้นหาหุ่นอัตโนมัติ</button>
+    <span id="findmsg" class="lbl"></span>
+  </div>
+</header>
+<main>
+  <div class="panel">
+    <div class="bar">
+      <span class="title" id="title">-</span>
+      <button class="small" id="scan">สแกนจุดจากหุ่น</button>
+      <button class="small" id="addpt">+ เพิ่มจุดเอง</button>
+      <button class="small" id="delrobot">ลบหุ่นคันนี้</button>
+    </div>
+    <div class="grid" id="points"></div>
+    <div id="msg"></div>
+  </div>
+</main>
+
+<script>
+var LS = 'keenon_hub_v1';
+var state = { robots: [], sel: 0 };
+try { var s = JSON.parse(localStorage.getItem(LS)); if (s && s.robots) state = s; } catch (e) {}
+var status = {};
+if (!state.subnet) state.subnet = '';
+if (!state.port) state.port = 8080;          // ip -> 'on' | 'off' | 'warn'
+var busy = false;
+
+function save() { try { localStorage.setItem(LS, JSON.stringify(state)); } catch (e) {} }
+function base(ip) { return 'http://' + (ip.indexOf(':') < 0 ? ip + ':' + (state.port || 8080) : ip); }
+function setMsg(t) { document.getElementById('msg').textContent = t; }
+
+function api(ip, path, ms) {
+  var c = new AbortController();
+  var t = setTimeout(function () { c.abort(); }, ms || 8000);
+  return fetch(base(ip) + path, { signal: c.signal })
+    .then(function (r) { clearTimeout(t); return r.json(); })
+    .catch(function (e) { clearTimeout(t); throw e; });
+}
+
+function render() {
+  var box = document.getElementById('robots');
+  box.innerHTML = '';
+  state.robots.forEach(function (r, i) {
+    var b = document.createElement('button');
+    b.className = 'chip' + (i === state.sel ? ' sel' : '');
+    var d = document.createElement('span');
+    d.className = 'dot ' + (status[r.ip] || '');
+    b.appendChild(d);
+    b.appendChild(document.createTextNode(r.ip));
+    b.onclick = function () { state.sel = i; save(); render(); };
+    box.appendChild(b);
+  });
+  var cur = state.robots[state.sel];
+  document.getElementById('title').textContent = cur ? 'หุ่น ' + cur.ip + ' — เลือกจุดที่ต้องการให้ไป' : 'ยังไม่มีหุ่น เพิ่ม IP ด้านบนก่อน';
+  var g = document.getElementById('points'); g.innerHTML = '';
+  if (!cur) return;
+  if (!cur.points.length) { g.innerHTML = '<span class="empty">ยังไม่มีจุด กด "สแกนจุดจากหุ่น" หรือ "+ เพิ่มจุดเอง"</span>'; }
+  cur.points.forEach(function (p) {
+    var b = document.createElement('button'); b.className = 'pt'; b.textContent = p; b.disabled = busy;
+    b.onclick = function () { go(p); };
+    g.appendChild(b);
+  });
+}
+
+function addRobot() {
+  var v = document.getElementById('newip').value.trim();
+  if (!v) return;
+  document.getElementById('newip').value = '';
+  if (state.robots.some(function (r) { return r.ip === v; })) return;
+  state.robots.push({ ip: v, points: [] }); state.sel = state.robots.length - 1;
+  save(); render(); pingAll(); scan();
+}
+
+function go(p) {
+  var r = state.robots[state.sel]; if (!r || busy) return;
+  busy = true; render(); setMsg('กำลังสั่ง ' + r.ip + ' ไปจุด ' + p + ' ...');
+  api(r.ip, '/go?point=' + encodeURIComponent(p), 45000)
+    .then(function (j) { setMsg(r.ip + ' → ' + p + ' : ' + j.msg); })
+    .catch(function () { setMsg('ติดต่อ ' + r.ip + ' ไม่ได้ (เช็ก WiFi / IP)'); })
+    .then(function () { busy = false; render(); });
+}
+
+function scan() {
+  var r = state.robots[state.sel]; if (!r || busy) return;
+  busy = true; render(); setMsg('กำลังอ่านรายชื่อจุดจาก ' + r.ip + ' (แท็บเล็ตจะเปิดแอพ Industry เอง) ...');
+  api(r.ip, '/points', 40000)
+    .then(function (j) {
+      if (j.ok) { r.points = j.points; save(); setMsg('พบ ' + j.points.length + ' จุด'); }
+      else setMsg('สแกนไม่สำเร็จ: ' + j.msg);
+    })
+    .catch(function () { setMsg('ติดต่อ ' + r.ip + ' ไม่ได้'); })
+    .then(function () { busy = false; render(); });
+}
+
+function pingAll() {
+  state.robots.forEach(function (r) {
+    api(r.ip, '/ping', 2500)
+      .then(function (j) { status[r.ip] = j.acc ? 'on' : 'warn'; })
+      .catch(function () { status[r.ip] = 'off'; })
+      .then(function () { if (!busy) render(); });
+  });
+}
+
+document.getElementById('scan').onclick = scan;
+document.getElementById('addpt').onclick = function () {
+  var r = state.robots[state.sel]; if (!r) return;
+  var n = prompt('ชื่อจุด (ต้องตรงกับที่แสดงในแอพ Industry)'); if (!n) return;
+  n = n.trim(); if (n && r.points.indexOf(n) < 0) { r.points.push(n); save(); render(); }
+};
+document.getElementById('delrobot').onclick = function () {
+  var r = state.robots[state.sel]; if (!r) return;
+  if (!confirm('ลบหุ่น ' + r.ip + ' ?')) return;
+  state.robots.splice(state.sel, 1); state.sel = 0; save(); render();
+};
+
+
+// ---------- ค้นหาหุ่นอัตโนมัติ ----------
+var finding = false;
+function guessSubnet() {
+  if (state.subnet) return state.subnet;
+  if (state.robots.length) { var m = state.robots[0].ip.split(':')[0].split('.'); if (m.length === 4) return m.slice(0, 3).join('.'); }
+  return '192.168.50';
+}
+function discover() {
+  if (finding) return;
+  var sub = document.getElementById('subnet').value.trim().replace(/\.$/, '');
+  var port = parseInt(document.getElementById('port').value, 10) || 8080;
+  if (!/^\d+\.\d+\.\d+$/.test(sub)) { document.getElementById('findmsg').textContent = 'ใส่ 3 ชุดแรกของ IP เช่น 192.168.50'; return; }
+  state.subnet = sub; state.port = port; save();
+  finding = true; var fm = document.getElementById('findmsg');
+  var n = 1, done = 0, found = 0, total = 254;
+  function worker() {
+    if (n > total) return Promise.resolve();
+    var host = sub + '.' + (n++);
+    return api(host + ':' + port, '/ping', 1200)
+      .then(function (j) {
+        if (j && j.ok === true && 'acc' in j) {
+          var key = host;
+          if (!state.robots.some(function (r) { return r.ip === key; })) {
+            state.robots.push({ ip: key, points: [] }); found++; save();
+          }
+          status[key] = j.acc ? 'on' : 'warn';
+        }
+      })
+      .catch(function () {})
+      .then(function () { done++; fm.textContent = 'กำลังค้นหา ' + done + '/' + total + ' พบใหม่ ' + found; return worker(); });
+  }
+  var pool = []; for (var i = 0; i < 40; i++) pool.push(worker());
+  Promise.all(pool).then(function () {
+    finding = false;
+    fm.textContent = 'ค้นหาเสร็จ พบหุ่นใหม่ ' + found + ' คัน (รวม ' + state.robots.length + ' คัน)';
+    if (state.sel >= state.robots.length) state.sel = 0;
+    save(); render();
+  });
+}
+document.getElementById('find').onclick = discover;
+document.getElementById('port').onchange = function () { state.port = parseInt(this.value, 10) || 8080; save(); pingAll(); };
+document.getElementById('addrobot').onclick = addRobot;
+document.getElementById('subnet').value = guessSubnet();
+document.getElementById('port').value = state.port;
+
+render(); pingAll(); setInterval(pingAll, 5000);
+setTimeout(discover, 300);   // ค้นหาอัตโนมัติทุกครั้งที่เปิดหน้า
+</script>
+</body>
+</html>
