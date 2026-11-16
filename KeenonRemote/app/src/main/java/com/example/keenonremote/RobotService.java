@@ -53,13 +53,25 @@ public class RobotService extends Service {
                 body = acc == null ? "Accessibility not enabled" : acc.dump();
             } else {
                 type = "text/html";
-                body = PAGE;
+                try {
+                    InputStream in = getAssets().open("hub.html");
+                    ByteArrayOutputStream bo = new ByteArrayOutputStream();
+                    byte[] buf = new byte[4096]; int n;
+                    while ((n = in.read(buf)) > 0) bo.write(buf, 0, n);
+                    in.close();
+                    body = bo.toString("UTF-8");
+                } catch (Exception e) { body = PAGE; }
             }
-           try {
-    InputStream in = getAssets().open("hub.html");
-    ByteArrayOutputStream bo = new ByteArrayOutputStream();
-    byte[] buf = new byte[4096]; int n;
-    while ((n = in.read(buf)) > 0) bo.write(buf, 0, n);
-    in.close();
-    body = bo.toString("UTF-8");
-} catch (Exception e) { body = PAGE; }
+            byte[] b = body.getBytes("UTF-8");
+            OutputStream o = s.getOutputStream();
+            o.write(("HTTP/1.1 200 OK\r\nContent-Type: " + type + "; charset=utf-8\r\nContent-Length: " + b.length +
+                "\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n").getBytes());
+            o.write(b); o.flush(); s.close();
+        } catch (Exception e) { try { s.close(); } catch (Exception ignored) { } }
+    }
+
+    static final String PAGE = "<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'>"
+        + "<title>Keenon Remote</title><body style='font-family:sans-serif;margin:30px'>"
+        + "<h2>Keenon Remote พร้อมใช้งาน</h2>ใช้หน้า hub.html ในคอมเพื่อสั่งงาน"
+        + "<p><a href=/dump>dump หน้าจอ</a> | <a href=/points>อ่านรายชื่อจุด</a></p>";
+}
