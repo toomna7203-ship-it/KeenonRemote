@@ -7,7 +7,7 @@ import java.io.*;
 import java.net.*;
 
 public class RobotService extends Service {
-    static final int PORT = 8080;   // ถ้าเคยเปลี่ยนพอร์ต ให้แก้เลขตรงนี้ให้เหมือนเดิม
+    static final int PORT = 9999;   // ถ้าเคยเปลี่ยนพอร์ต ให้แก้เลขตรงนี้ให้เหมือนเดิม
     volatile boolean running = false;
     ServerSocket ss;
 
