@@ -1,11 +1,13 @@
 package com.example.keenonremote;
 import android.accessibilityservice.AccessibilityService;
+import android.app.ActivityManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
+import android.view.accessibility.AccessibilityWindowInfo;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.locks.ReentrantLock;
@@ -22,7 +24,12 @@ public class RobotAccessibilityService extends AccessibilityService {
     @Override public void onInterrupt() { }
 
     static int maxPoints() { return "diner".equals(mode) ? 4 : 1; }
-    static String startText() { return "diner".equals(mode) ? "Start" : "เริ่มทำงาน"; }
+    static final String[] OK_KEYS = { "OK", "ตกลง" };
+    static String[] startKeys() {
+        return "diner".equals(mode)
+            ? new String[] { "Start", "เริ่ม", "เริ่มต้น", "การออกตัวแบบด่วน" }
+            : new String[] { "เริ่มทำงาน" };
+    }
 
     /** หาแอพจากชื่อไอคอน: DINERBOT (T9) ก่อน ถ้าไม่มีค่อยหา Industry */
     static Intent launchIntent(Context c) {
@@ -63,22 +70,71 @@ public class RobotAccessibilityService extends AccessibilityService {
         if (!LOCK.tryLock()) return "busy: robot is running another command";
         try {
             if (appPkg == null && launchIntent(this) == null) return "robot app not found";
-            if ("diner".equals(mode)) return goDiner(pointsCsv);
-            return goIndustry(pointsCsv.split(",")[0].trim(), floor);
+            String res = runOnce(pointsCsv, floor, 20000);
+            if (res.startsWith("timeout")) {            // ค้าง: ออกจากแอพแล้วเข้าใหม่ แล้วลองอีกครั้ง
+                restartApp();
+                res = runOnce(pointsCsv, floor, 35000);
+                if (res.startsWith("sent")) res += " (รีสตาร์ทแอพหุ่นอัตโนมัติ 1 ครั้ง)";
+            }
+            return res;
         } finally { LOCK.unlock(); }
     }
 
+    String runOnce(String pointsCsv, String floor, long ms) {
+        if ("diner".equals(mode)) return goDiner(pointsCsv, ms);
+        return goIndustry(pointsCsv.split(",")[0].trim(), floor, ms);
+    }
+
+    /** ออกจากแอพหุ่น ปิดโปรเซส แล้วเปิดใหม่ เหมือนที่คนกดออกแล้วเข้าใหม่ */
+    void restartApp() {
+        performGlobalAction(GLOBAL_ACTION_HOME);
+        sleep(900);
+        try {
+            ((ActivityManager) getSystemService(Context.ACTIVITY_SERVICE)).killBackgroundProcesses(appPkg);
+        } catch (Exception ignored) { }
+        sleep(900);
+        Intent i = launchIntent(this);
+        if (i != null) {
+            i.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
+            startActivity(i);
+        }
+        sleep(3000);
+    }
+
+    String restart() {
+        if (!LOCK.tryLock()) return "busy: robot is running another command";
+        try {
+            if (appPkg == null && launchIntent(this) == null) return "robot app not found";
+            restartApp();
+            return "app restarted";
+        } finally { LOCK.unlock(); }
+    }
+
+    /** หน้าต่างของแอพหุ่น (หาจากทุกหน้าต่าง ไม่พึ่งแค่หน้าต่างที่ active) */
+    AccessibilityNodeInfo appRoot() {
+        try {
+            List<AccessibilityWindowInfo> ws = getWindows();
+            if (ws != null && appPkg != null) {
+                for (AccessibilityWindowInfo w : ws) {
+                    AccessibilityNodeInfo r = w.getRoot();
+                    if (r != null && appPkg.contentEquals(r.getPackageName())) return r;
+                }
+            }
+        } catch (Exception ignored) { }
+        return getRootInActiveWindow();
+    }
+
     /** T9: เลือกจุด 1-4 จุดตามลำดับ แล้วกด Start */
-    String goDiner(String csv) {
+    String goDiner(String csv, long ms) {
         ArrayList<String> pts = new ArrayList<String>();
         for (String s : csv.split(",")) {
             s = s.trim();
             if (s.length() > 0 && pts.size() < 4 && !pts.contains(s)) pts.add(s);
         }
-        long end = System.currentTimeMillis() + 40000, lastLaunch = 0;
+        long end = System.currentTimeMillis() + ms, lastLaunch = 0;
         int next = 0;
         while (System.currentTimeMillis() < end) {
-            AccessibilityNodeInfo root = getRootInActiveWindow();
+            AccessibilityNodeInfo root = appRoot();
             if (!inApp(root)) {
                 lastLaunch = relaunch(lastLaunch);
                 if (lastLaunch < 0) return "robot app not found";
@@ -88,7 +144,7 @@ public class RobotAccessibilityService extends AccessibilityService {
                 AccessibilityNodeInfo n = find(root, pts.get(next));
                 if (n != null && click(n)) { next++; sleep(600); continue; }
             } else {
-                AccessibilityNodeInfo b = find(root, "Start");
+                AccessibilityNodeInfo b = findAny(root, startKeys());
                 if (b != null && b.isEnabled()) { click(b); return "sent to " + csv; }
             }
             sleep(300);
@@ -97,11 +153,11 @@ public class RobotAccessibilityService extends AccessibilityService {
     }
 
     /** Industry: ตรงไป -> จุด -> เริ่มทำงาน */
-    String goIndustry(String point, String floor) {
-        long end = System.currentTimeMillis() + 30000, lastLaunch = 0;
+    String goIndustry(String point, String floor, long ms) {
+        long end = System.currentTimeMillis() + ms, lastLaunch = 0;
         boolean pointClicked = false;
         while (System.currentTimeMillis() < end) {
-            AccessibilityNodeInfo root = getRootInActiveWindow();
+            AccessibilityNodeInfo root = appRoot();
             if (!inApp(root)) {
                 lastLaunch = relaunch(lastLaunch);
                 if (lastLaunch < 0) return "robot app not found";
@@ -112,7 +168,7 @@ public class RobotAccessibilityService extends AccessibilityService {
                 if (p != null) {
                     if (floor != null && floor.length() > 0) {
                         AccessibilityNodeInfo f = find(root, floor);
-                        if (f != null) { click(f); sleep(500); root = getRootInActiveWindow(); p = find(root, point); }
+                        if (f != null) { click(f); sleep(500); root = appRoot(); p = find(root, point); }
                     }
                     if (p != null) { click(p); pointClicked = true; sleep(700); }
                     continue;
@@ -135,13 +191,13 @@ public class RobotAccessibilityService extends AccessibilityService {
             if (appPkg == null && launchIntent(this) == null) return "{\"ok\":false,\"msg\":\"robot app not found\"}";
             long end = System.currentTimeMillis() + 25000, lastLaunch = 0;
             while (System.currentTimeMillis() < end) {
-                AccessibilityNodeInfo root = getRootInActiveWindow();
+                AccessibilityNodeInfo root = appRoot();
                 if (!inApp(root)) {
                     lastLaunch = relaunch(lastLaunch);
                     if (lastLaunch < 0) return "{\"ok\":false,\"msg\":\"robot app not found\"}";
                     sleep(500); continue;
                 }
-                if (find(root, startText()) != null) {          // อยู่หน้าเลือกจุดแล้ว
+                if (findAny(root, startKeys()) != null) {          // อยู่หน้าเลือกจุดแล้ว
                     ArrayList<String> out = new ArrayList<String>();
                     collect(root, out);
                     StringBuilder sb = new StringBuilder("{\"ok\":true,\"points\":[");
@@ -174,19 +230,24 @@ public class RobotAccessibilityService extends AccessibilityService {
     }
     boolean skip(String t) {
         String n = norm(t);
-        return n.equals("ตรงไป") || n.equals("เริ่มทำงาน") || n.equals("start") || n.equals("beverage")
-            || n.equals("return") || n.equals("idle") || n.equals("operating")
-            || n.matches("l\\d+") || n.startsWith("ชั้น")
-            || n.contains("%") || n.matches("\\d+\\s*s") || n.matches(".*\\d{1,2}:\\d{2}.*");
+        for (String k : startKeys()) if (norm(k).equals(n)) return true;
+        for (String k : OK_KEYS) if (norm(k).equals(n)) return true;
+        return n.equals("ตรงไป") || n.equals("beverage") || n.equals("return") || n.equals("กลับ")
+            || n.equals("idle") || n.equals("operating") || n.equals("ว่าง")
+            || n.equals("การใช้งานล่าสุด") || n.equals("ตำแหน่งทุกจุด")
+            || n.matches("l\\d+|\\d+l") || ("diner".equals(mode) && n.matches("\\d+"))
+            || n.startsWith("ชั้น") || n.contains("%") || n.matches("\\d+\\s*s") || n.matches(".*\\d{1,2}:\\d{2}.*");
     }
 
     // ---------------------------------------------------------------- สถานะ / กด OK (T9 ถึงจุดแล้ว)
     String status() {
-        AccessibilityNodeInfo root = getRootInActiveWindow();
-        if (!inApp(root)) return "{\"ok\":true,\"state\":\"other\",\"msg\":\"\"}";
-        if (find(root, "OK") != null) {                        // มีหน้าต่าง "Please take Lx" + ปุ่ม OK
-            ArrayList<String> t = new ArrayList<String>();
-            texts(root, t);
+        AccessibilityNodeInfo root = appRoot();
+        if (!inApp(root)) return "{\"ok\":true,\"state\":\"other\",\"idle\":false,\"msg\":\"\"}";
+        ArrayList<String> t = new ArrayList<String>();
+        texts(root, t);
+        boolean idle = false;                                   // แถบสถานะมุมขวาบน: Idle / ว่าง
+        for (String x : t) { String n = norm(x); if (n.equals("idle") || n.equals("ว่าง")) idle = true; }
+        if (findAny(root, OK_KEYS) != null) {                  // มีหน้าต่าง "Please take Lx" + ปุ่ม OK
             String no = "", take = "";
             for (int i = 0; i < t.size(); i++) {
                 String x = t.get(i);
@@ -197,15 +258,15 @@ public class RobotAccessibilityService extends AccessibilityService {
                 }
             }
             String msg = (no + " " + take).trim();
-            return "{\"ok\":true,\"state\":\"arrived\",\"msg\":\"" + RobotService.esc(msg) + "\"}";
+            return "{\"ok\":true,\"state\":\"arrived\",\"idle\":false,\"msg\":\"" + RobotService.esc(msg) + "\"}";
         }
-        if (find(root, startText()) != null) return "{\"ok\":true,\"state\":\"ready\",\"msg\":\"\"}";
-        return "{\"ok\":true,\"state\":\"busy\",\"msg\":\"\"}";
+        if (findAny(root, startKeys()) != null) return "{\"ok\":true,\"state\":\"ready\",\"idle\":" + idle + ",\"msg\":\"\"}";
+        return "{\"ok\":true,\"state\":\"busy\",\"idle\":" + idle + ",\"msg\":\"\"}";
     }
     String pressOk() {
-        AccessibilityNodeInfo root = getRootInActiveWindow();
+        AccessibilityNodeInfo root = appRoot();
         if (!inApp(root)) return "app not in front";
-        AccessibilityNodeInfo b = find(root, "OK");
+        AccessibilityNodeInfo b = findAny(root, OK_KEYS);
         return (b != null && click(b)) ? "ok pressed" : "no OK button";
     }
     void texts(AccessibilityNodeInfo n, ArrayList<String> out) {
@@ -223,6 +284,10 @@ public class RobotAccessibilityService extends AccessibilityService {
         return c == null ? "" : c.toString().replace('\u00a0', ' ').trim().replaceAll("\\s+", " ").toLowerCase();
     }
     AccessibilityNodeInfo find(AccessibilityNodeInfo n, String t) { return findN(n, norm(t)); }
+    AccessibilityNodeInfo findAny(AccessibilityNodeInfo n, String[] keys) {
+        for (String k : keys) { AccessibilityNodeInfo r = find(n, k); if (r != null) return r; }
+        return null;
+    }
     AccessibilityNodeInfo findN(AccessibilityNodeInfo n, String key) {
         if (n == null) return null;
         if (norm(n.getText()).equals(key) || norm(n.getContentDescription()).equals(key)) return n;
@@ -240,10 +305,22 @@ public class RobotAccessibilityService extends AccessibilityService {
 
     String dump() {
         StringBuilder sb = new StringBuilder();
-        AccessibilityNodeInfo r = getRootInActiveWindow();
-        if (r == null) return "no active window";
-        sb.append("package: ").append(r.getPackageName()).append("  mode: ").append(mode).append("\n");
-        walk(r, 0, sb);
+        sb.append("mode: ").append(mode).append("  appPkg: ").append(appPkg).append("\n");
+        boolean any = false;
+        try {
+            List<AccessibilityWindowInfo> ws = getWindows();
+            if (ws != null) for (AccessibilityWindowInfo w : ws) {
+                AccessibilityNodeInfo r = w.getRoot();
+                sb.append("=== window type=").append(w.getType()).append(" layer=").append(w.getLayer())
+                  .append(" active=").append(w.isActive()).append(" pkg=").append(r == null ? "null" : r.getPackageName()).append("\n");
+                if (r != null) { walk(r, 0, sb); any = true; }
+            }
+        } catch (Exception e) { sb.append("windows error: ").append(e).append("\n"); }
+        if (!any) {
+            AccessibilityNodeInfo r = appRoot();
+            if (r == null) return sb.append("no window").toString();
+            walk(r, 0, sb);
+        }
         return sb.toString();
     }
     void walk(AccessibilityNodeInfo n, int d, StringBuilder sb) {
