@@ -104,18 +104,31 @@ public class RobotAccessibilityService extends AccessibilityService {
         } finally { LOCK.unlock(); }
     }
 
-    /** หน้าต่างของแอพหุ่น (หาจากทุกหน้าต่าง ไม่พึ่งแค่หน้าต่างที่ active) */
+    /** หน้าต่างของแอพหุ่น: ใช้หน้าต่างที่ active ถ้าเป็นของแอพ ไม่งั้นเลือกหน้าต่างของแอพที่มีเนื้อหามากสุด */
     AccessibilityNodeInfo appRoot() {
+        AccessibilityNodeInfo active = getRootInActiveWindow();
+        if (active != null && appPkg != null && appPkg.contentEquals(active.getPackageName())) return active;
+        AccessibilityNodeInfo best = null;
+        int bestN = -1;
         try {
             List<AccessibilityWindowInfo> ws = getWindows();
             if (ws != null && appPkg != null) {
                 for (AccessibilityWindowInfo w : ws) {
                     AccessibilityNodeInfo r = w.getRoot();
-                    if (r != null && appPkg.contentEquals(r.getPackageName())) return r;
+                    if (r != null && appPkg.contentEquals(r.getPackageName())) {
+                        int c = countNodes(r);
+                        if (c > bestN) { best = r; bestN = c; }
+                    }
                 }
             }
         } catch (Exception ignored) { }
-        return getRootInActiveWindow();
+        return best != null ? best : active;
+    }
+    int countNodes(AccessibilityNodeInfo n) {
+        if (n == null) return 0;
+        int c = 1;
+        for (int i = 0; i < n.getChildCount(); i++) c += countNodes(n.getChild(i));
+        return c;
     }
 
     /** T9: เลือกจุด 1-4 จุดตามลำดับ แล้วกด Start */
@@ -134,7 +147,7 @@ public class RobotAccessibilityService extends AccessibilityService {
                 if (lastLaunch < 0) return "robot app not found";
                 sleep(500); continue;
             }
-            if (!hasText(root) && wakes < 3 && System.currentTimeMillis() - lastWake > 3000) {   // จอพัก/หน้าหุ่น
+            if (!hasText(root) && allTexts().isEmpty() && wakes < 3 && System.currentTimeMillis() - lastWake > 3000) {   // จอพัก/หน้าหุ่น
                 wake(root); wakes++; lastWake = System.currentTimeMillis(); continue;
             }
             if (next < pts.size()) {
@@ -267,7 +280,7 @@ public class RobotAccessibilityService extends AccessibilityService {
             boolean free = idleWord || !busyWord;
             return "{\"ok\":true,\"state\":\"ready\",\"idle\":" + free + ",\"seen\":" + seen + ",\"msg\":\"\"}";
         }
-        if (t.isEmpty()) return "{\"ok\":true,\"state\":\"sleep\",\"idle\":false,\"seen\":" + seen + ",\"msg\":\"\"}";   // หน้าจอหน้าหุ่น/จอพัก
+        if (all.isEmpty()) return "{\"ok\":true,\"state\":\"sleep\",\"idle\":false,\"seen\":" + seen + ",\"msg\":\"\"}";   // หน้าจอหน้าหุ่น/จอพัก
         return "{\"ok\":true,\"state\":\"busy\",\"idle\":false,\"seen\":" + seen + ",\"msg\":\"\"}";
     }
     String pressOk() {
@@ -333,10 +346,10 @@ public class RobotAccessibilityService extends AccessibilityService {
         }
         return null;
     }
-    /** ปลุกหน้าจอพัก/หน้าจอหน้าหุ่น: แตะจุดที่กดได้จุดแรก ถ้าไม่มีให้กดย้อนกลับ */
+    /** ปลุกหน้าจอพัก/หน้าหุ่น: แตะจุดที่กดได้จุดแรก (ไม่กดย้อนกลับ เพื่อไม่ให้หลุดออกจากแอพ) */
     void wake(AccessibilityNodeInfo root) {
         AccessibilityNodeInfo c = firstClickable(root);
-        if (c == null || !c.performAction(AccessibilityNodeInfo.ACTION_CLICK)) performGlobalAction(GLOBAL_ACTION_BACK);
+        if (c != null) c.performAction(AccessibilityNodeInfo.ACTION_CLICK);
         sleep(1500);
     }
     /** ข้อความจากทุกหน้าต่างบนจอ (ต้องเปิด flagRetrieveInteractiveWindows) ไม่งั้นใช้เฉพาะหน้าต่างแอพ */
