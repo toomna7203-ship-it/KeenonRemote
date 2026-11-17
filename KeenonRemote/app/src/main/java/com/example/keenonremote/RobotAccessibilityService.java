@@ -27,7 +27,7 @@ public class RobotAccessibilityService extends AccessibilityService {
     static final String[] OK_KEYS = { "OK", "ตกลง" };
     static String[] startKeys() {
         return "diner".equals(mode)
-            ? new String[] { "Start", "เริ่ม", "เริ่มต้น", "การออกตัวแบบด่วน" }
+            ? new String[] { "Start", "เริ่ม", "เริ่มต้น", "การออกตัวแบบด่วน", "~ออกตัว" }
             : new String[] { "เริ่มทำงาน" };
     }
 
@@ -70,13 +70,7 @@ public class RobotAccessibilityService extends AccessibilityService {
         if (!LOCK.tryLock()) return "busy: robot is running another command";
         try {
             if (appPkg == null && launchIntent(this) == null) return "robot app not found";
-            String res = runOnce(pointsCsv, floor, 20000);
-            if (res.startsWith("timeout")) {            // ค้าง: ออกจากแอพแล้วเข้าใหม่ แล้วลองอีกครั้ง
-                restartApp();
-                res = runOnce(pointsCsv, floor, 35000);
-                if (res.startsWith("sent")) res += " (รีสตาร์ทแอพหุ่นอัตโนมัติ 1 ครั้ง)";
-            }
-            return res;
+            return runOnce(pointsCsv, floor, 40000);
         } finally { LOCK.unlock(); }
     }
 
@@ -131,14 +125,17 @@ public class RobotAccessibilityService extends AccessibilityService {
             s = s.trim();
             if (s.length() > 0 && pts.size() < 4 && !pts.contains(s)) pts.add(s);
         }
-        long end = System.currentTimeMillis() + ms, lastLaunch = 0;
-        int next = 0;
+        long end = System.currentTimeMillis() + ms, lastLaunch = 0, lastWake = 0;
+        int next = 0, wakes = 0;
         while (System.currentTimeMillis() < end) {
             AccessibilityNodeInfo root = appRoot();
             if (!inApp(root)) {
                 lastLaunch = relaunch(lastLaunch);
                 if (lastLaunch < 0) return "robot app not found";
                 sleep(500); continue;
+            }
+            if (!hasText(root) && wakes < 3 && System.currentTimeMillis() - lastWake > 3000) {   // จอพัก/หน้าหุ่น
+                wake(root); wakes++; lastWake = System.currentTimeMillis(); continue;
             }
             if (next < pts.size()) {
                 AccessibilityNodeInfo n = find(root, pts.get(next));
@@ -242,11 +239,17 @@ public class RobotAccessibilityService extends AccessibilityService {
     // ---------------------------------------------------------------- สถานะ / กด OK (T9 ถึงจุดแล้ว)
     String status() {
         AccessibilityNodeInfo root = appRoot();
-        if (!inApp(root)) return "{\"ok\":true,\"state\":\"other\",\"idle\":false,\"msg\":\"\"}";
+        if (!inApp(root)) return "{\"ok\":true,\"state\":\"other\",\"idle\":false,\"seen\":[],\"msg\":\"\"}";
         ArrayList<String> t = new ArrayList<String>();
         texts(root, t);
-        boolean idle = false;                                   // แถบสถานะมุมขวาบน: Idle / ว่าง
-        for (String x : t) { String n = norm(x); if (n.equals("idle") || n.equals("ว่าง")) idle = true; }
+        ArrayList<String> all = allTexts();
+        boolean idleWord = false, busyWord = false;            // แถบสถานะ: Idle/ว่าง หรือ Operating/ปฏิบัติ...
+        for (String x : all) {
+            String n = norm(x);
+            if (n.equals("idle") || n.equals("ว่าง")) idleWord = true;
+            if (n.equals("operating") || n.equals("working") || n.contains("ปฏิบัติ") || n.equals("กำลังทำงาน") || n.equals("กำลังดำเนินการ")) busyWord = true;
+        }
+        String seen = seenJson(all);
         if (findAny(root, OK_KEYS) != null) {                  // มีหน้าต่าง "Please take Lx" + ปุ่ม OK
             String no = "", take = "";
             for (int i = 0; i < t.size(); i++) {
@@ -258,10 +261,14 @@ public class RobotAccessibilityService extends AccessibilityService {
                 }
             }
             String msg = (no + " " + take).trim();
-            return "{\"ok\":true,\"state\":\"arrived\",\"idle\":false,\"msg\":\"" + RobotService.esc(msg) + "\"}";
+            return "{\"ok\":true,\"state\":\"arrived\",\"idle\":false,\"seen\":" + seen + ",\"msg\":\"" + RobotService.esc(msg) + "\"}";
         }
-        if (findAny(root, startKeys()) != null) return "{\"ok\":true,\"state\":\"ready\",\"idle\":" + idle + ",\"msg\":\"\"}";
-        return "{\"ok\":true,\"state\":\"busy\",\"idle\":" + idle + ",\"msg\":\"\"}";
+        if (findAny(root, startKeys()) != null) {              // อยู่หน้าเลือกจุด: ว่าง ถ้าไม่มีคำว่ากำลังทำงาน
+            boolean free = idleWord || !busyWord;
+            return "{\"ok\":true,\"state\":\"ready\",\"idle\":" + free + ",\"seen\":" + seen + ",\"msg\":\"\"}";
+        }
+        if (t.isEmpty()) return "{\"ok\":true,\"state\":\"sleep\",\"idle\":false,\"seen\":" + seen + ",\"msg\":\"\"}";   // หน้าจอหน้าหุ่น/จอพัก
+        return "{\"ok\":true,\"state\":\"busy\",\"idle\":false,\"seen\":" + seen + ",\"msg\":\"\"}";
     }
     String pressOk() {
         AccessibilityNodeInfo root = appRoot();
@@ -283,19 +290,82 @@ public class RobotAccessibilityService extends AccessibilityService {
     static String norm(CharSequence c) {
         return c == null ? "" : c.toString().replace('\u00a0', ' ').trim().replaceAll("\\s+", " ").toLowerCase();
     }
-    AccessibilityNodeInfo find(AccessibilityNodeInfo n, String t) { return findN(n, norm(t)); }
+    static String nk(CharSequence c) { return norm(c).replace(" ", ""); }
+    AccessibilityNodeInfo find(AccessibilityNodeInfo n, String t) {
+        if (t.startsWith("~")) return findC(n, nk(t.substring(1)));
+        return findN(n, nk(t));
+    }
     AccessibilityNodeInfo findAny(AccessibilityNodeInfo n, String[] keys) {
         for (String k : keys) { AccessibilityNodeInfo r = find(n, k); if (r != null) return r; }
         return null;
     }
     AccessibilityNodeInfo findN(AccessibilityNodeInfo n, String key) {
         if (n == null) return null;
-        if (norm(n.getText()).equals(key) || norm(n.getContentDescription()).equals(key)) return n;
+        if (nk(n.getText()).equals(key) || nk(n.getContentDescription()).equals(key)) return n;
         for (int i = 0; i < n.getChildCount(); i++) {
             AccessibilityNodeInfo r = findN(n.getChild(i), key);
             if (r != null) return r;
         }
         return null;
+    }
+    AccessibilityNodeInfo findC(AccessibilityNodeInfo n, String key) {
+        if (n == null || key.length() == 0) return null;
+        if (nk(n.getText()).contains(key) || nk(n.getContentDescription()).contains(key)) return n;
+        for (int i = 0; i < n.getChildCount(); i++) {
+            AccessibilityNodeInfo r = findC(n.getChild(i), key);
+            if (r != null) return r;
+        }
+        return null;
+    }
+    boolean hasText(AccessibilityNodeInfo n) {
+        if (n == null) return false;
+        CharSequence cs = n.getText();
+        if (cs != null && cs.toString().trim().length() > 0) return true;
+        for (int i = 0; i < n.getChildCount(); i++) if (hasText(n.getChild(i))) return true;
+        return false;
+    }
+    AccessibilityNodeInfo firstClickable(AccessibilityNodeInfo n) {
+        if (n == null) return null;
+        if (n.isClickable()) return n;
+        for (int i = 0; i < n.getChildCount(); i++) {
+            AccessibilityNodeInfo r = firstClickable(n.getChild(i));
+            if (r != null) return r;
+        }
+        return null;
+    }
+    /** ปลุกหน้าจอพัก/หน้าจอหน้าหุ่น: แตะจุดที่กดได้จุดแรก ถ้าไม่มีให้กดย้อนกลับ */
+    void wake(AccessibilityNodeInfo root) {
+        AccessibilityNodeInfo c = firstClickable(root);
+        if (c == null || !c.performAction(AccessibilityNodeInfo.ACTION_CLICK)) performGlobalAction(GLOBAL_ACTION_BACK);
+        sleep(1500);
+    }
+    /** ข้อความจากทุกหน้าต่างบนจอ (ต้องเปิด flagRetrieveInteractiveWindows) ไม่งั้นใช้เฉพาะหน้าต่างแอพ */
+    ArrayList<String> allTexts() {
+        ArrayList<String> out = new ArrayList<String>();
+        boolean any = false;
+        try {
+            List<AccessibilityWindowInfo> ws = getWindows();
+            if (ws != null) for (AccessibilityWindowInfo w : ws) {
+                AccessibilityNodeInfo r = w.getRoot();
+                if (r != null) { texts(r, out); any = true; }
+            }
+        } catch (Exception ignored) { }
+        if (!any) texts(appRoot(), out);
+        return out;
+    }
+    String seenJson(ArrayList<String> all) {
+        ArrayList<String> u = new ArrayList<String>();
+        for (String x : all) {
+            String v = x.length() > 24 ? x.substring(0, 24) : x;
+            if (!u.contains(v)) u.add(v);
+            if (u.size() >= 14) break;
+        }
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < u.size(); i++) {
+            if (i > 0) sb.append(",");
+            sb.append("\"").append(RobotService.esc(u.get(i))).append("\"");
+        }
+        return sb.append("]").toString();
     }
     boolean click(AccessibilityNodeInfo n) {
         while (n != null && !n.isClickable()) n = n.getParent();
