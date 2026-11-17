@@ -83,8 +83,3 @@ public class RobotService extends Service {
         + "<h2>Keenon Remote พร้อมใช้งาน</h2>ใช้หน้า hub.html ในคอมเพื่อสั่งงาน"
         + "<p><a href=/dump>dump หน้าจอ</a> | <a href=/points>อ่านรายชื่อจุด</a></p>";
 }
-    static final String PAGE = "<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'>"
-        + "<title>Keenon Remote</title><body style='font-family:sans-serif;margin:30px'>"
-        + "<h2>Keenon Remote พร้อมใช้งาน</h2>ใช้หน้า hub.html ในคอมเพื่อสั่งงาน"
-        + "<p><a href=/dump>dump หน้าจอ</a> | <a href=/points>อ่านรายชื่อจุด</a></p>";
-}
