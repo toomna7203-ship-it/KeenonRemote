@@ -180,6 +180,44 @@ public class RobotAccessibilityService extends AccessibilityService {
             || n.contains("%") || n.matches("\\d+\\s*s") || n.matches(".*\\d{1,2}:\\d{2}.*");
     }
 
+    // ---------------------------------------------------------------- สถานะ / กด OK (T9 ถึงจุดแล้ว)
+    String status() {
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (!inApp(root)) return "{\"ok\":true,\"state\":\"other\",\"msg\":\"\"}";
+        if (find(root, "OK") != null) {                        // มีหน้าต่าง "Please take Lx" + ปุ่ม OK
+            ArrayList<String> t = new ArrayList<String>();
+            texts(root, t);
+            String no = "", take = "";
+            for (int i = 0; i < t.size(); i++) {
+                String x = t.get(i);
+                if (no.length() == 0 && norm(x).matches("no\\.? ?\\d+")) no = x;
+                if (take.length() == 0 && norm(x).contains("take")) {
+                    take = x;
+                    if (!norm(x).matches(".*l\\d+.*") && i + 1 < t.size() && norm(t.get(i + 1)).matches("l\\d+")) take = x + " " + t.get(i + 1);
+                }
+            }
+            String msg = (no + " " + take).trim();
+            return "{\"ok\":true,\"state\":\"arrived\",\"msg\":\"" + RobotService.esc(msg) + "\"}";
+        }
+        if (find(root, startText()) != null) return "{\"ok\":true,\"state\":\"ready\",\"msg\":\"\"}";
+        return "{\"ok\":true,\"state\":\"busy\",\"msg\":\"\"}";
+    }
+    String pressOk() {
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (!inApp(root)) return "app not in front";
+        AccessibilityNodeInfo b = find(root, "OK");
+        return (b != null && click(b)) ? "ok pressed" : "no OK button";
+    }
+    void texts(AccessibilityNodeInfo n, ArrayList<String> out) {
+        if (n == null) return;
+        CharSequence cs = n.getText();
+        if (cs != null) {
+            String t = cs.toString().replace('\u00a0', ' ').trim();
+            if (t.length() > 0) out.add(t);
+        }
+        for (int i = 0; i < n.getChildCount(); i++) texts(n.getChild(i), out);
+    }
+
     // ---------------------------------------------------------------- เครื่องมือ
     static String norm(CharSequence c) {
         return c == null ? "" : c.toString().replace('\u00a0', ' ').trim().replaceAll("\\s+", " ").toLowerCase();
