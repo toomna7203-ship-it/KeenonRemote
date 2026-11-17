@@ -28,6 +28,8 @@ public class RobotService extends Service {
             }
         } catch (Exception e) { running = false; }
     }
+    static String esc(String s) { return s == null ? "" : s.replace("\\", "\\\\").replace("\"", "\\\""); }
+
     void handle(Socket s) {
         try {
             BufferedReader r = new BufferedReader(new InputStreamReader(s.getInputStream(), "UTF-8"));
@@ -40,14 +42,15 @@ public class RobotService extends Service {
             RobotAccessibilityService acc = RobotAccessibilityService.instance;
             String p = u.getPath() == null ? "/" : u.getPath();
             if (p.equals("/go")) {
-                String point = u.getQueryParameter("point");
+                String point = u.getQueryParameter("point");   // หลายจุดคั่นด้วย , (T9 สูงสุด 4 จุด)
                 String floor = u.getQueryParameter("floor");
                 body = acc == null ? "{\"ok\":false,\"msg\":\"Accessibility not enabled\"}"
-                    : "{\"ok\":true,\"msg\":\"" + acc.go(this, point, floor) + "\"}";
+                    : "{\"ok\":true,\"msg\":\"" + esc(acc.go(this, point, floor)) + "\"}";
             } else if (p.equals("/points")) {
                 body = acc == null ? "{\"ok\":false,\"msg\":\"Accessibility not enabled\"}" : acc.points(this);
             } else if (p.equals("/ping")) {
-                body = "{\"ok\":true,\"acc\":" + (acc != null) + "}";
+                body = "{\"ok\":true,\"acc\":" + (acc != null) + ",\"mode\":\"" + RobotAccessibilityService.mode
+                    + "\",\"max\":" + RobotAccessibilityService.maxPoints() + "}";
             } else if (p.equals("/dump")) {
                 type = "text/plain";
                 body = acc == null ? "Accessibility not enabled" : acc.dump();
