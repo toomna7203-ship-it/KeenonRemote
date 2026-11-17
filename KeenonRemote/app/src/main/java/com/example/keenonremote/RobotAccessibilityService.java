@@ -104,31 +104,9 @@ public class RobotAccessibilityService extends AccessibilityService {
         } finally { LOCK.unlock(); }
     }
 
-    /** หน้าต่างของแอพหุ่น: ใช้หน้าต่างที่ active ถ้าเป็นของแอพ ไม่งั้นเลือกหน้าต่างของแอพที่มีเนื้อหามากสุด */
+    /** หน้าต่างที่กำลังใช้งานอยู่ (เหมือนเวอร์ชันแรกที่ใช้งานได้) ถ้าไม่ใช่แอพหุ่น แอพจะเปิดแอพหุ่นขึ้นมาเอง */
     AccessibilityNodeInfo appRoot() {
-        AccessibilityNodeInfo active = getRootInActiveWindow();
-        if (active != null && appPkg != null && appPkg.contentEquals(active.getPackageName())) return active;
-        AccessibilityNodeInfo best = null;
-        int bestN = -1;
-        try {
-            List<AccessibilityWindowInfo> ws = getWindows();
-            if (ws != null && appPkg != null) {
-                for (AccessibilityWindowInfo w : ws) {
-                    AccessibilityNodeInfo r = w.getRoot();
-                    if (r != null && appPkg.contentEquals(r.getPackageName())) {
-                        int c = countNodes(r);
-                        if (c > bestN) { best = r; bestN = c; }
-                    }
-                }
-            }
-        } catch (Exception ignored) { }
-        return best != null ? best : active;
-    }
-    int countNodes(AccessibilityNodeInfo n) {
-        if (n == null) return 0;
-        int c = 1;
-        for (int i = 0; i < n.getChildCount(); i++) c += countNodes(n.getChild(i));
-        return c;
+        return getRootInActiveWindow();
     }
 
     /** T9: เลือกจุด 1-4 จุดตามลำดับ แล้วกด Start */
