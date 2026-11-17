@@ -51,6 +51,11 @@ public class RobotService extends Service {
             } else if (p.equals("/ping")) {
                 body = "{\"ok\":true,\"acc\":" + (acc != null) + ",\"mode\":\"" + RobotAccessibilityService.mode
                     + "\",\"max\":" + RobotAccessibilityService.maxPoints() + "}";
+            } else if (p.equals("/status")) {
+                body = acc == null ? "{\"ok\":false,\"msg\":\"Accessibility not enabled\"}" : acc.status();
+            } else if (p.equals("/ok")) {
+                body = acc == null ? "{\"ok\":false,\"msg\":\"Accessibility not enabled\"}"
+                    : "{\"ok\":true,\"msg\":\"" + esc(acc.pressOk()) + "\"}";
             } else if (p.equals("/dump")) {
                 type = "text/plain";
                 body = acc == null ? "Accessibility not enabled" : acc.dump();
@@ -73,6 +78,11 @@ public class RobotService extends Service {
         } catch (Exception e) { try { s.close(); } catch (Exception ignored) { } }
     }
 
+    static final String PAGE = "<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'>"
+        + "<title>Keenon Remote</title><body style='font-family:sans-serif;margin:30px'>"
+        + "<h2>Keenon Remote พร้อมใช้งาน</h2>ใช้หน้า hub.html ในคอมเพื่อสั่งงาน"
+        + "<p><a href=/dump>dump หน้าจอ</a> | <a href=/points>อ่านรายชื่อจุด</a></p>";
+}
     static final String PAGE = "<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'>"
         + "<title>Keenon Remote</title><body style='font-family:sans-serif;margin:30px'>"
         + "<h2>Keenon Remote พร้อมใช้งาน</h2>ใช้หน้า hub.html ในคอมเพื่อสั่งงาน"
