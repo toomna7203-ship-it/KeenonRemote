@@ -241,7 +241,7 @@ public class RobotAccessibilityService extends AccessibilityService {
             if (n.equals("operating") || n.equals("working") || n.contains("ปฏิบัติ") || n.equals("กำลังทำงาน") || n.equals("กำลังดำเนินการ")) busyWord = true;
         }
         String seen = seenJson(all);
-        if (findAny(root, OK_KEYS) != null) {                  // มีหน้าต่าง "Please take Lx" + ปุ่ม OK
+        if ("diner".equals(mode) && findAny(root, OK_KEYS) != null) {   // T9: มีหน้าต่าง "Please take Lx" + ปุ่ม OK
             String no = "", take = "";
             for (int i = 0; i < t.size(); i++) {
                 String x = t.get(i);
@@ -254,7 +254,8 @@ public class RobotAccessibilityService extends AccessibilityService {
             String msg = (no + " " + take).trim();
             return "{\"ok\":true,\"state\":\"arrived\",\"idle\":false,\"seen\":" + seen + ",\"msg\":\"" + RobotService.esc(msg) + "\"}";
         }
-        if (findAny(root, startKeys()) != null) {              // อยู่หน้าเลือกจุด: ว่าง ถ้าไม่มีคำว่ากำลังทำงาน
+        boolean homeScreen = !"diner".equals(mode) && find(root, "ตรงไป") != null;   // Industry: หน้าเมนูหลัก
+        if (findAny(root, startKeys()) != null || homeScreen) {   // อยู่หน้าเมนูหลัก/เลือกจุด: ว่าง ถ้าไม่มีคำว่ากำลังทำงาน
             boolean free = idleWord || !busyWord;
             return "{\"ok\":true,\"state\":\"ready\",\"idle\":" + free + ",\"seen\":" + seen + ",\"msg\":\"\"}";
         }
