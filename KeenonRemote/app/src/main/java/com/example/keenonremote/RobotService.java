@@ -50,12 +50,26 @@ public class RobotService extends Service {
                 body = acc == null ? "{\"ok\":false,\"msg\":\"Accessibility not enabled\"}" : acc.points(this);
             } else if (p.equals("/ping")) {
                 body = "{\"ok\":true,\"acc\":" + (acc != null) + ",\"mode\":\"" + RobotAccessibilityService.mode
-                    + "\",\"max\":" + RobotAccessibilityService.maxPoints() + "}";
+                    + "\",\"max\":" + RobotAccessibilityService.maxPoints()
+                    + ",\"name\":\"" + esc(getSharedPreferences("cfg", MODE_PRIVATE).getString("name", "")) + "\"}";
+            } else if (p.equals("/return")) {
+                body = acc == null ? "{\"ok\":false,\"msg\":\"Accessibility not enabled\"}"
+                    : "{\"ok\":true,\"msg\":\"" + esc(acc.goReturn()) + "\"}";
+            } else if (p.equals("/setname")) {
+                String nm = u.getQueryParameter("name");
+                if (nm == null) nm = "";
+                nm = nm.trim();
+                if (nm.length() > 40) nm = nm.substring(0, 40);
+                getSharedPreferences("cfg", MODE_PRIVATE).edit().putString("name", nm).apply();
+                body = "{\"ok\":true,\"name\":\"" + esc(nm) + "\"}";
             } else if (p.equals("/status")) {
                 body = acc == null ? "{\"ok\":false,\"msg\":\"Accessibility not enabled\"}" : acc.status();
             } else if (p.equals("/ok")) {
                 body = acc == null ? "{\"ok\":false,\"msg\":\"Accessibility not enabled\"}"
                     : "{\"ok\":true,\"msg\":\"" + esc(acc.pressOk()) + "\"}";
+            } else if (p.equals("/restart")) {
+                body = acc == null ? "{\"ok\":false,\"msg\":\"Accessibility not enabled\"}"
+                    : "{\"ok\":true,\"msg\":\"" + esc(acc.restart()) + "\"}";
             } else if (p.equals("/dump")) {
                 type = "text/plain";
                 body = acc == null ? "Accessibility not enabled" : acc.dump();
