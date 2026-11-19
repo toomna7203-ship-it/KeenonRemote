@@ -75,6 +75,7 @@ public class RobotAccessibilityService extends AccessibilityService {
     }
 
     static final String[] RETURN_KEYS = { "Return", "กลับ" };
+    static final String[] CONFIRM_KEYS = { "Confirm", "ยืนยัน" };
 
     /** T9: กดปุ่ม Return (กลับ) มุมขวาบน เพื่อให้หุ่นกลับจุดพัก (ทำเมื่ออยู่หน้าเลือกจุดเท่านั้น) */
     String goReturn() {
@@ -96,7 +97,15 @@ public class RobotAccessibilityService extends AccessibilityService {
                 }
                 if (findAny(root, startKeys()) != null) {           // อยู่หน้าเลือกจุด ไม่ใช่หน้าต่าง OK
                     AccessibilityNodeInfo b = findAny(root, RETURN_KEYS);
-                    if (b != null && click(b)) return "sent return";
+                    if (b != null && click(b)) {
+                        long end2 = System.currentTimeMillis() + 6000;       // หน้าต่าง "Return to the origin point?" -> กด Confirm/ยืนยัน ให้เอง
+                        while (System.currentTimeMillis() < end2) {
+                            sleep(400);
+                            AccessibilityNodeInfo c = findAny(appRoot(), CONFIRM_KEYS);
+                            if (c != null && click(c)) return "sent return (confirmed)";
+                        }
+                        return "sent return (ไม่พบหน้าต่างยืนยัน)";
+                    }
                 }
                 sleep(300);
             }
