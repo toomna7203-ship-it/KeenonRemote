@@ -79,6 +79,8 @@
       <span class="title" id="title">-</span>
       <button class="small" id="scan">สแกนจุดจากหุ่น</button>
       <button class="small" id="addpt">+ เพิ่มจุดเอง</button>
+      <button class="small" id="retbtn">↩ กลับจุดพัก</button>
+      <button class="small" id="rename">✎ ตั้งชื่อ</button>
       <button class="small" id="delrobot">ลบหุ่นคันนี้</button>
     </div>
     <div class="grid" id="points"></div>
@@ -114,6 +116,8 @@ if (served && location.port) { state.port = parseInt(location.port, 10); }
 
 function save() { try { localStorage.setItem(LS, JSON.stringify(state)); } catch (e) {} }
 function base(ip) { return 'http://' + (ip.indexOf(':') < 0 ? ip + ':' + (state.port || 8080) : ip); }
+function nm(r) { return r.name ? r.name + ' (' + r.ip + ')' : r.ip; }
+function nmIp(ip) { var f = state.robots.filter(function (r) { return r.ip === ip; })[0]; return f ? nm(f) : ip; }
 function setMsg(t) { document.getElementById('msg').textContent = t; }
 
 function api(ip, path, ms) {
@@ -134,7 +138,7 @@ function render() {
     var d = document.createElement('span');
     d.className = 'dot ' + (robotStatus[r.ip] || '');
     b.appendChild(d);
-    b.appendChild(document.createTextNode(r.ip));
+    b.appendChild(document.createTextNode(r.name ? r.name + ' · ' + r.ip : r.ip));
     b.onclick = function () { state.sel = i; groupMode = null; state.groupMode = null; save(); render(); };
     box.appendChild(b);
   });
@@ -151,7 +155,9 @@ function render() {
   document.getElementById('gpanel').style.display = gv ? '' : 'none';
   if (gv) { renderGroup(); return; }
   var cur = state.robots[state.sel];
-  document.getElementById('title').textContent = cur ? 'หุ่น ' + cur.ip + (cur.mode === 'diner' ? ' (T9)' : cur.mode === 'industry' ? ' (S100)' : '') + ' — เลือกจุดที่ต้องการให้ไป' : 'ยังไม่มีหุ่น เพิ่ม IP ด้านบนก่อน';
+  document.getElementById('title').textContent = cur ? 'หุ่น ' + nm(cur) + (cur.mode === 'diner' ? ' (T9)' : cur.mode === 'industry' ? ' (S100)' : '') + ' — เลือกจุดที่ต้องการให้ไป' : 'ยังไม่มีหุ่น เพิ่ม IP ด้านบนก่อน';
+  document.getElementById('retbtn').style.display = (cur && cur.mode === 'diner') ? '' : 'none';
+  document.getElementById('rename').style.display = cur ? '' : 'none';
   var g = document.getElementById('points'); g.innerHTML = '';
   if (!cur) return;
   if (!cur.points.length) { g.innerHTML = '<span class="empty">ยังไม่มีจุด กด "สแกนจุดจากหุ่น" หรือ "+ เพิ่มจุดเอง"</span>'; }
@@ -202,10 +208,21 @@ function addRobot() {
 function go(list) {
   var r = state.robots[state.sel]; if (!r || busy) return;
   var txt = list.join(', ');
-  busy = true; render(); setMsg('กำลังสั่ง ' + r.ip + ' ไปจุด ' + txt + ' ...');
+  busy = true; render(); setMsg('กำลังสั่ง ' + nm(r) + ' ไปจุด ' + txt + ' ...');
   api(r.ip, '/go?point=' + encodeURIComponent(list.join(',')), 60000)
-    .then(function (j) { setMsg(r.ip + ' → ' + txt + ' : ' + j.msg); if (/^sent/.test(j.msg)) picks[r.ip] = []; })
+    .then(function (j) { setMsg(nm(r) + ' → ' + txt + ' : ' + j.msg); if (/^sent/.test(j.msg)) picks[r.ip] = []; })
     .catch(function () { setMsg('ติดต่อ ' + r.ip + ' ไม่ได้ (เช็ก WiFi / IP)'); })
+    .then(function () { busy = false; render(); });
+}
+
+function sendReturn(r) {
+  if (!r || busy) return;
+  if (!confirm('ส่ง ' + nm(r) + ' กลับจุดพัก (Return) ?')) return;
+  busy = true; render(); setMsg('กำลังสั่ง ' + nm(r) + ' กลับจุดพัก ...');
+  lastDispatch[r.ip] = Date.now();
+  api(r.ip, '/return', 45000)
+    .then(function (j) { setMsg(nm(r) + ' : ' + j.msg); })
+    .catch(function () { setMsg('ติดต่อ ' + nm(r) + ' ไม่ได้'); })
     .then(function () { busy = false; render(); });
 }
 
@@ -224,13 +241,21 @@ function scan() {
 function pingAll() {
   state.robots.forEach(function (r) {
     api(r.ip, '/ping', 2500)
-      .then(function (j) { robotStatus[r.ip] = j.acc ? 'on' : 'warn'; if (j.mode) r.mode = j.mode; r.max = j.max || 1; save(); })
+      .then(function (j) { robotStatus[r.ip] = j.acc ? 'on' : 'warn'; if (j.mode) r.mode = j.mode; r.max = j.max || 1; if (j.name) r.name = j.name; save(); })
       .catch(function () { robotStatus[r.ip] = 'off'; })
       .then(function () { if (!busy) render(); });
   });
 }
 
 document.getElementById('scan').onclick = scan;
+document.getElementById('retbtn').onclick = function () { sendReturn(state.robots[state.sel]); };
+document.getElementById('rename').onclick = function () {
+  var r = state.robots[state.sel]; if (!r) return;
+  var n = prompt('ตั้งชื่อหุ่นคันนี้ (IP ' + r.ip + ') เว้นว่างเพื่อลบชื่อ', r.name || '');
+  if (n === null) return;
+  r.name = n.trim().slice(0, 40); save(); render();
+  api(r.ip, '/setname?name=' + encodeURIComponent(r.name), 5000).catch(function () {});
+};
 document.getElementById('addpt').onclick = function () {
   var r = state.robots[state.sel]; if (!r) return;
   var n = prompt('ชื่อจุด (ต้องตรงกับที่แสดงในแอพ Industry)'); if (!n) return;
@@ -304,7 +329,7 @@ function renderAlerts() {
   ips.forEach(function (ip) {
     var d = document.createElement('div'); d.className = 'alert';
     var t = document.createElement('span'); t.className = 'txt';
-    t.textContent = '🔔 หุ่น ' + ip + ' ถึงแล้ว' + (arrivals[ip] ? ' — ' + arrivals[ip] : '');
+    t.textContent = '🔔 หุ่น ' + nmIp(ip) + ' ถึงแล้ว' + (arrivals[ip] ? ' — ' + arrivals[ip] : '');
     var b = document.createElement('button'); b.textContent = 'OK';
     b.onclick = function () {
       b.disabled = true;
@@ -392,6 +417,11 @@ function renderGroup() {
   var cl = document.createElement('button'); cl.className = 'small'; cl.textContent = 'ล้างที่เลือก'; cl.disabled = !sel.length;
   cl.onclick = function () { picks[gk] = []; renderGroup(); };
   act.appendChild(call); act.appendChild(cl);
+  if (groupMode === 'diner') {
+    var rt = document.createElement('button'); rt.className = 'small'; rt.textContent = '↩ ส่งคันที่ว่างกลับจุดพัก (1 คัน)'; rt.disabled = !!queue;
+    rt.onclick = function () { callGroup(['กลับจุดพัก'], 'return'); };
+    act.appendChild(rt);
+  }
   if (queue) {
     var cq = document.createElement('button'); cq.className = 'small'; cq.textContent = 'ยกเลิกคิว (' + queue.list.join(', ') + ')';
     cq.onclick = function () { queue = null; gmsg('ยกเลิกคิวแล้ว'); renderGroup(); };
@@ -403,14 +433,14 @@ function renderGroup() {
     var d = document.createElement('span'); d.className = 'dot ' + (robotStatus[r.ip] || '');
     var lb = robotLabel(r);
     var tg = document.createElement('span'); tg.className = 'tag ' + lb[1]; tg.textContent = lb[0];
-    row.appendChild(d); row.appendChild(document.createTextNode(r.ip + ' ')); row.appendChild(tg);
+    row.appendChild(d); row.appendChild(document.createTextNode(nm(r) + ' ')); row.appendChild(tg);
     var st2 = robotState[r.ip];
     if (st2 && lb[1] !== 'free') { var sn = document.createElement('span'); sn.className = 'seen'; sn.textContent = '[' + st2.state + '] เห็น: ' + (st2.seen || []).slice(0, 8).join(' | '); row.appendChild(sn); }
     l.appendChild(row);
   });
 }
-function callGroup(list) {
-  queue = { list: list, tries: 0, mode: groupMode };
+function callGroup(list, type) {
+  queue = { list: list, tries: 0, mode: groupMode, type: type || 'go' };
   gmsg('กำลังหาหุ่นที่ว่าง ...');
   renderGroup(); tryDispatch();
 }
@@ -421,15 +451,15 @@ function tryDispatch() {
   if (!fr.length) { gmsg('ทุกคันไม่ว่าง รอคิว: ' + queue.list.join(', ') + ' (จะส่งให้คันแรกที่ว่าง)'); return; }
   var r = fr[0], list = queue.list;
   dispatching = true; queue.tries++; lastDispatch[r.ip] = Date.now();
-  gmsg('ส่ง ' + r.ip + ' ไป ' + list.join(', ') + ' ...'); renderGroup();
-  api(r.ip, '/go?point=' + encodeURIComponent(list.join(',')), 110000)
+  gmsg('ส่ง ' + nm(r) + ' ไป ' + list.join(', ') + ' ...'); renderGroup();
+  api(r.ip, queue.type === 'return' ? '/return' : '/go?point=' + encodeURIComponent(list.join(',')), 110000)
     .then(function (j) {
-      if (/^sent/.test(j.msg)) { gmsg('✔ ' + r.ip + ' รับงานแล้ว: ' + list.join(', ')); var qm = queue ? queue.mode : groupMode; queue = null; picks['__g' + qm] = []; }
-      else if (queue && queue.tries >= 3) { gmsg('ส่งไม่สำเร็จ (' + r.ip + ' : ' + j.msg + ') ยกเลิกคิว'); queue = null; }
-      else gmsg(r.ip + ' : ' + j.msg + ' → ลองคันอื่น');
+      if (/^sent/.test(j.msg)) { gmsg('✔ ' + nm(r) + ' รับงานแล้ว: ' + list.join(', ')); var qm = queue ? queue.mode : groupMode; queue = null; picks['__g' + qm] = []; }
+      else if (queue && queue.tries >= 3) { gmsg('ส่งไม่สำเร็จ (' + nm(r) + ' : ' + j.msg + ') ยกเลิกคิว'); queue = null; }
+      else gmsg(nm(r) + ' : ' + j.msg + ' → ลองคันอื่น');
     })
     .catch(function () {
-      if (queue && queue.tries >= 3) { gmsg('ติดต่อหุ่นไม่ได้ ยกเลิกคิว'); queue = null; } else gmsg('ติดต่อ ' + r.ip + ' ไม่ได้ → ลองคันอื่น');
+      if (queue && queue.tries >= 3) { gmsg('ติดต่อหุ่นไม่ได้ ยกเลิกคิว'); queue = null; } else gmsg('ติดต่อ ' + nm(r) + ' ไม่ได้ → ลองคันอื่น');
     })
     .then(function () { dispatching = false; renderGroup(); });
 }
