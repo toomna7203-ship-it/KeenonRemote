@@ -74,6 +74,36 @@ public class RobotAccessibilityService extends AccessibilityService {
         } finally { LOCK.unlock(); }
     }
 
+    static final String[] RETURN_KEYS = { "Return", "กลับ" };
+
+    /** T9: กดปุ่ม Return (กลับ) มุมขวาบน เพื่อให้หุ่นกลับจุดพัก (ทำเมื่ออยู่หน้าเลือกจุดเท่านั้น) */
+    String goReturn() {
+        if (!LOCK.tryLock()) return "busy: robot is running another command";
+        try {
+            if (appPkg == null && launchIntent(this) == null) return "robot app not found";
+            if (!"diner".equals(mode)) return "return not supported for this robot type";
+            long end = System.currentTimeMillis() + 25000, lastLaunch = 0, lastWake = 0;
+            int wakes = 0;
+            while (System.currentTimeMillis() < end) {
+                AccessibilityNodeInfo root = appRoot();
+                if (!inApp(root)) {
+                    lastLaunch = relaunch(lastLaunch);
+                    if (lastLaunch < 0) return "robot app not found";
+                    sleep(500); continue;
+                }
+                if (!hasText(root) && allTexts().isEmpty() && wakes < 3 && System.currentTimeMillis() - lastWake > 3000) {
+                    wake(root); wakes++; lastWake = System.currentTimeMillis(); continue;
+                }
+                if (findAny(root, startKeys()) != null) {           // อยู่หน้าเลือกจุด ไม่ใช่หน้าต่าง OK
+                    AccessibilityNodeInfo b = findAny(root, RETURN_KEYS);
+                    if (b != null && click(b)) return "sent return";
+                }
+                sleep(300);
+            }
+            return "timeout (หุ่นไม่ได้อยู่หน้าเลือกจุด)";
+        } finally { LOCK.unlock(); }
+    }
+
     String runOnce(String pointsCsv, String floor, long ms) {
         if ("diner".equals(mode)) return goDiner(pointsCsv, ms);
         return goIndustry(pointsCsv.split(",")[0].trim(), floor, ms);
