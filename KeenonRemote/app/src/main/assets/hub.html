@@ -217,7 +217,6 @@ function go(list) {
 
 function sendReturn(r) {
   if (!r || busy) return;
-  if (!confirm('ส่ง ' + nm(r) + ' กลับจุดพัก (Return) ?')) return;
   busy = true; render(); setMsg('กำลังสั่ง ' + nm(r) + ' กลับจุดพัก ...');
   lastDispatch[r.ip] = Date.now();
   api(r.ip, '/return', 45000)
