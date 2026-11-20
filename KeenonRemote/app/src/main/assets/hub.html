@@ -49,6 +49,8 @@
   .rlist { margin-top:20px; display:flex; flex-direction:column; gap:8px; }
   .rrow { display:flex; gap:10px; align-items:center; font-size:16px; }
   .tag { padding:2px 12px; border-radius:999px; font-size:13px; background:var(--line); color:var(--text); }
+  .tag.bad { background:var(--red); color:#fff; }
+  .alert.danger { border-color:var(--red); }
   .tag.free { background:var(--green); color:#fff; } .tag.wait { background:#e0a100; color:#fff; }
   .seen { font-size:12px; color:var(--muted); margin-left:6px; }
   .gmsg { margin-top:16px; min-height:24px; color:var(--muted); font-size:16px; }
@@ -83,6 +85,7 @@
       <button class="small" id="rename">✎ ตั้งชื่อ</button>
       <button class="small" id="delrobot">ลบหุ่นคันนี้</button>
     </div>
+    <div class="gmsg" id="rstat"></div>
     <div class="grid" id="points"></div>
     <div class="actions" id="actions"></div>
     <div id="msg"></div>
@@ -158,6 +161,7 @@ function render() {
   document.getElementById('title').textContent = cur ? 'หุ่น ' + nm(cur) + (cur.mode === 'diner' ? ' (T9)' : cur.mode === 'industry' ? ' (S100)' : '') + ' — เลือกจุดที่ต้องการให้ไป' : 'ยังไม่มีหุ่น เพิ่ม IP ด้านบนก่อน';
   document.getElementById('retbtn').style.display = (cur && cur.mode === 'diner') ? '' : 'none';
   document.getElementById('rename').style.display = cur ? '' : 'none';
+  updateRstat();
   var g = document.getElementById('points'); g.innerHTML = '';
   if (!cur) return;
   if (!cur.points.length) { g.innerHTML = '<span class="empty">ยังไม่มีจุด กด "สแกนจุดจากหุ่น" หรือ "+ เพิ่มจุดเอง"</span>'; }
@@ -320,9 +324,10 @@ var arrivals = {};        // ip -> ข้อความ (ถ้าหุ่น�
 var lastSig = '';
 function renderAlerts() {
   var ips = Object.keys(arrivals).filter(function (k) { return arrivals[k] !== null; });
-  var sig = JSON.stringify(ips.map(function (k) { return [k, arrivals[k]]; }));
+  var wips = state.robots.filter(function (r) { return robotState[r.ip] && robotState[r.ip].state === 'estop'; }).map(function (r) { return r.ip; });
+  var sig = JSON.stringify([ips.map(function (k) { return [k, arrivals[k]]; }), wips]);
   if (sig === lastSig) return;
-  var fresh = ips.length && sig.length > lastSig.length;
+  var fresh = (ips.length || wips.length) && sig.length > lastSig.length;
   lastSig = sig;
   var box = document.getElementById('alerts'); box.innerHTML = '';
   ips.forEach(function (ip) {
@@ -339,16 +344,22 @@ function renderAlerts() {
     };
     d.appendChild(t); d.appendChild(b); box.appendChild(d);
   });
-  document.title = ips.length ? '🔔 Keenon Hub' : 'Keenon Hub';
+  wips.forEach(function (ip) {
+    var d = document.createElement('div'); d.className = 'alert danger';
+    var t = document.createElement('span'); t.className = 'txt';
+    t.textContent = '🛑 หุ่น ' + nmIp(ip) + ' ถูกกดปุ่มฉุกเฉิน — หมุนปุ่มฉุกเฉินที่ตัวหุ่นเพื่อปลดล็อก';
+    d.appendChild(t); box.appendChild(d);
+  });
+  document.title = (ips.length || wips.length) ? '🔔 Keenon Hub' : 'Keenon Hub';
   if (fresh) { try { var a = new (window.AudioContext || window.webkitAudioContext)(); var o = a.createOscillator(); o.connect(a.destination); o.frequency.value = 880; o.start(); setTimeout(function () { o.stop(); a.close(); }, 250); } catch (e) {} }
 }
 function pollArrivals() {
   state.robots.forEach(function (r) {
     if (r.mode !== 'diner' && r.mode !== 'industry') return;
     api(r.ip, '/status', 2500)
-      .then(function (j) { arrivals[r.ip] = (r.mode === 'diner' && j.state === 'arrived') ? (j.msg || '') : null; if (j.state !== 'ready' && lastDispatch[r.ip] && Date.now() - lastDispatch[r.ip] > 3000) busySeen[r.ip] = Date.now(); robotState[r.ip] = { state: j.state, idle: !!j.idle, seen: j.seen || [] }; if (j.state === 'ready' && j.idle) lastReady[r.ip] = Date.now(); })
+      .then(function (j) { arrivals[r.ip] = (r.mode === 'diner' && j.state === 'arrived') ? (j.msg || '') : null; if (j.state !== 'ready' && lastDispatch[r.ip] && Date.now() - lastDispatch[r.ip] > 3000) busySeen[r.ip] = Date.now(); robotState[r.ip] = { state: j.state, idle: !!j.idle, seen: j.seen || [], battery: (j.battery === undefined ? -1 : j.battery) }; if (j.state === 'ready' && j.idle) lastReady[r.ip] = Date.now(); })
       .catch(function () { arrivals[r.ip] = null; robotState[r.ip] = null; })
-      .then(function () { renderAlerts(); if (groupMode) renderGroup(); });
+      .then(function () { renderAlerts(); if (groupMode) renderGroup(); else updateRstat(); });
   });
 }
 setInterval(pollArrivals, 2000);
@@ -371,12 +382,22 @@ function isFree(r) {
   return false;
 }
 function robotLabel(r) {
-  if (robotStatus[r.ip] === 'off') return ['ติดต่อไม่ได้', ''];
-  if (arrivals[r.ip] !== null && arrivals[r.ip] !== undefined) return ['รอกด OK', 'wait'];
+  if (robotStatus[r.ip] === 'off') return ['ติดต่อไม่ได้', 'bad'];
   var st = robotState[r.ip];
+  if (st && st.state === 'estop') return ['🛑 กดปุ่มฉุกเฉินอยู่', 'bad'];
+  if (st && st.state === 'docking') return ['⚡ กำลังเข้าชาร์จ (จับคู่เสาชาร์จ)', 'wait'];
+  if (st && st.state === 'charging') return ['🔋 กำลังชาร์จแบต', 'wait'];
+  if (arrivals[r.ip] !== null && arrivals[r.ip] !== undefined) return ['รอกด OK', 'wait'];
   if (!st) return ['ไม่ทราบสถานะ', ''];
   if (isFree(r)) return [st.state === 'sleep' ? 'ว่าง (หน้าจอพัก)' : 'ว่าง', 'free'];
   return ['กำลังทำงาน', ''];
+}
+function updateRstat() {
+  var el = document.getElementById('rstat'); if (!el) return;
+  var cur = state.robots[state.sel];
+  if (!cur || (cur.mode !== 'diner' && cur.mode !== 'industry')) { el.textContent = ''; return; }
+  var li = robotLabel(cur), st = robotState[cur.ip];
+  el.textContent = 'สถานะ: ' + li[0] + (st && st.battery >= 0 ? '  ·  🔋 ' + st.battery + '%' : '');
 }
 function freeRobots(m) {
   var now = Date.now();
@@ -434,7 +455,8 @@ function renderGroup() {
     var tg = document.createElement('span'); tg.className = 'tag ' + lb[1]; tg.textContent = lb[0];
     row.appendChild(d); row.appendChild(document.createTextNode(nm(r) + ' ')); row.appendChild(tg);
     var st2 = robotState[r.ip];
-    if (st2 && lb[1] !== 'free') { var sn = document.createElement('span'); sn.className = 'seen'; sn.textContent = '[' + st2.state + '] เห็น: ' + (st2.seen || []).slice(0, 8).join(' | '); row.appendChild(sn); }
+    if (st2 && st2.battery >= 0) { var bt = document.createElement('span'); bt.className = 'seen'; bt.textContent = '🔋 ' + st2.battery + '%'; row.appendChild(bt); }
+    if (st2 && lb[1] !== 'free' && ['estop', 'docking', 'charging'].indexOf(st2.state) < 0) { var sn = document.createElement('span'); sn.className = 'seen'; sn.textContent = '[' + st2.state + '] เห็น: ' + (st2.seen || []).slice(0, 8).join(' | '); row.appendChild(sn); }
     l.appendChild(row);
   });
 }
