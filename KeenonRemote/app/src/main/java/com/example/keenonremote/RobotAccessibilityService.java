@@ -24,7 +24,7 @@ public class RobotAccessibilityService extends AccessibilityService {
     @Override public void onInterrupt() { }
 
     static int maxPoints() { return "diner".equals(mode) ? 4 : 1; }
-    static final String[] OK_KEYS = { "OK", "ตกลง" };
+    static final String[] OK_KEYS = { "OK", "ตกลง", "ยืนยันการรับ", "Confirm receipt" };
     static String[] startKeys() {
         return "diner".equals(mode)
             ? new String[] { "Start", "เริ่ม", "เริ่มต้น", "การออกตัวแบบด่วน", "~ออกตัว" }
@@ -70,6 +70,8 @@ public class RobotAccessibilityService extends AccessibilityService {
         if (!LOCK.tryLock()) return "busy: robot is running another command";
         try {
             if (appPkg == null && launchIntent(this) == null) return "robot app not found";
+            String sp = specialState(allTexts());
+            if (sp.length() > 0) return "busy: " + sp;
             return runOnce(pointsCsv, floor, 40000);
         } finally { LOCK.unlock(); }
     }
@@ -83,6 +85,8 @@ public class RobotAccessibilityService extends AccessibilityService {
         try {
             if (appPkg == null && launchIntent(this) == null) return "robot app not found";
             if (!"diner".equals(mode)) return "return not supported for this robot type";
+            String sp = specialState(allTexts());
+            if (sp.length() > 0) return "busy: " + sp;
             long end = System.currentTimeMillis() + 25000, lastLaunch = 0, lastWake = 0;
             int wakes = 0;
             while (System.currentTimeMillis() < end) {
@@ -267,39 +271,63 @@ public class RobotAccessibilityService extends AccessibilityService {
     }
 
     // ---------------------------------------------------------------- สถานะ / กด OK (T9 ถึงจุดแล้ว)
+    /** หน้าจอพิเศษ: ปุ่มฉุกเฉินถูกกด / กำลังเข้าชาร์จ (จับคู่เสาชาร์จ) / กำลังชาร์จแบต */
+    String specialState(ArrayList<String> all) {
+        boolean estop = false, dock = false, chg = false;
+        for (String x : all) {
+            String n = norm(x);
+            if (n.contains("emergency") || n.contains("ฉุกเฉิน") || n.contains("e-stop")) estop = true;
+            if (n.contains("กำลังจับคู่") || n.contains("มาถึงเสาชาร์จ") || n.contains("pairing")) dock = true;
+            if (n.contains("charging") || n.contains("กำลังชาร์จ") || n.contains("หยุดชาร์จ")) chg = true;
+        }
+        return estop ? "estop" : dock ? "docking" : chg ? "charging" : "";
+    }
+    /** เปอร์เซ็นต์แบตจากข้อความ เช่น "74%" (-1 ถ้าไม่เห็น) */
+    int battery(ArrayList<String> all) {
+        for (String x : all) {
+            String n = norm(x).replace(" ", "");
+            if (n.matches("\\d{1,3}%")) {
+                try { return Integer.parseInt(n.substring(0, n.length() - 1)); } catch (Exception ignored) { }
+            }
+        }
+        return -1;
+    }
+
     String status() {
+        ArrayList<String> all = allTexts();                      // ข้อความจากทุกหน้าต่างบนจอ
+        String tail = ",\"battery\":" + battery(all) + ",\"seen\":" + seenJson(all);
+        String sp = specialState(all);
+        if (sp.length() > 0) return "{\"ok\":true,\"state\":\"" + sp + "\",\"idle\":false" + tail + ",\"msg\":\"\"}";
         AccessibilityNodeInfo root = appRoot();
-        if (!inApp(root)) return "{\"ok\":true,\"state\":\"other\",\"idle\":false,\"seen\":[],\"msg\":\"\"}";
+        if (!inApp(root)) return "{\"ok\":true,\"state\":\"other\",\"idle\":false" + tail + ",\"msg\":\"\"}";
         ArrayList<String> t = new ArrayList<String>();
         texts(root, t);
-        ArrayList<String> all = allTexts();
         boolean idleWord = false, busyWord = false;            // แถบสถานะ: Idle/ว่าง หรือ Operating/ปฏิบัติ...
         for (String x : all) {
             String n = norm(x);
             if (n.equals("idle") || n.equals("ว่าง")) idleWord = true;
             if (n.equals("operating") || n.equals("working") || n.contains("ปฏิบัติ") || n.equals("กำลังทำงาน") || n.equals("กำลังดำเนินการ")) busyWord = true;
         }
-        String seen = seenJson(all);
         if ("diner".equals(mode) && findAny(root, OK_KEYS) != null) {   // T9: มีหน้าต่าง "Please take Lx" + ปุ่ม OK
             String no = "", take = "";
             for (int i = 0; i < t.size(); i++) {
                 String x = t.get(i);
                 if (no.length() == 0 && norm(x).matches("no\\.? ?\\d+")) no = x;
-                if (take.length() == 0 && norm(x).contains("take")) {
+                if (take.length() == 0 && (norm(x).contains("take") || norm(x).contains("โปรด"))) {
                     take = x;
-                    if (!norm(x).matches(".*l\\d+.*") && i + 1 < t.size() && norm(t.get(i + 1)).matches("l\\d+")) take = x + " " + t.get(i + 1);
+                    if (!norm(x).matches(".*(l\\d+|\\d+l).*") && i + 1 < t.size() && norm(t.get(i + 1)).matches("l\\d+|\\d+l")) take = x + " " + t.get(i + 1);
                 }
             }
             String msg = (no + " " + take).trim();
-            return "{\"ok\":true,\"state\":\"arrived\",\"idle\":false,\"seen\":" + seen + ",\"msg\":\"" + RobotService.esc(msg) + "\"}";
+            return "{\"ok\":true,\"state\":\"arrived\",\"idle\":false" + tail + ",\"msg\":\"" + RobotService.esc(msg) + "\"}";
         }
         boolean homeScreen = !"diner".equals(mode) && find(root, "ตรงไป") != null;   // Industry: หน้าเมนูหลัก
         if (findAny(root, startKeys()) != null || homeScreen) {   // อยู่หน้าเมนูหลัก/เลือกจุด: ว่าง ถ้าไม่มีคำว่ากำลังทำงาน
             boolean free = idleWord || !busyWord;
-            return "{\"ok\":true,\"state\":\"ready\",\"idle\":" + free + ",\"seen\":" + seen + ",\"msg\":\"\"}";
+            return "{\"ok\":true,\"state\":\"ready\",\"idle\":" + free + tail + ",\"msg\":\"\"}";
         }
-        if (all.isEmpty()) return "{\"ok\":true,\"state\":\"sleep\",\"idle\":false,\"seen\":" + seen + ",\"msg\":\"\"}";   // หน้าจอหน้าหุ่น/จอพัก
-        return "{\"ok\":true,\"state\":\"busy\",\"idle\":false,\"seen\":" + seen + ",\"msg\":\"\"}";
+        if (all.isEmpty()) return "{\"ok\":true,\"state\":\"sleep\",\"idle\":false" + tail + ",\"msg\":\"\"}";   // หน้าจอหน้าหุ่น/จอพัก
+        return "{\"ok\":true,\"state\":\"busy\",\"idle\":false" + tail + ",\"msg\":\"\"}";
     }
     String pressOk() {
         AccessibilityNodeInfo root = appRoot();
