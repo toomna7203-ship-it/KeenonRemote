@@ -2,102 +2,315 @@
 <html lang="th">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Keenon Hub</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e0f11">
+<title>Keenon Remote</title>
 <style>
-  :root { --bg:#f5f6f8; --card:#fff; --text:#1c1f26; --muted:#6b7280; --blue:#2b7de9; --green:#22a559; --red:#d64545; --line:#dfe3ea; }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg:#14161a; --card:#1e2127; --text:#eceff4; --muted:#9aa3b2; --line:#333a45; }
+  :root {
+    color-scheme: light dark;
+    --bg:#eceef2; --surface:#ffffff; --soft:#f3f4f7; --ink:#0e0f11; --on-ink:#ffffff;
+    --muted:#5d6572; --line:#dadee6; --tile:#0e0f11; --on-tile:#ffffff;
+    --ok:#12a150; --on-ok:#ffffff; --ok-soft:#dff4e8;
+    --warn:#b87900; --warn-soft:#fcefcf;
+    --bad:#d9373d; --bad-soft:#fde5e6;
+    --font: "Noto Sans Thai","Noto Sans Thai UI","Sarabun","Leelawadee UI",Tahoma,system-ui,-apple-system,"Segoe UI",sans-serif;
   }
-  * { box-sizing:border-box; }
-  body { margin:0; font-family:system-ui,"Segoe UI",Tahoma,sans-serif; background:var(--bg); color:var(--text); }
-  header { padding:16px 24px 0; }
-  h1 { font-size:20px; margin:0 0 12px; }
-  .robots { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
-  .chip { display:flex; align-items:center; gap:8px; padding:10px 16px; border-radius:999px; border:2px solid var(--line);
-          background:var(--card); color:var(--text); font-size:16px; cursor:pointer; }
-  .chip.sel { border-color:var(--blue); background:var(--blue); color:#fff; }
-  .dot { width:10px; height:10px; border-radius:50%; background:#999; }
-  .dot.on { background:var(--green); } .dot.off { background:var(--red); } .dot.warn { background:#e0a100; }
-  .tools { display:none; flex-wrap:wrap; gap:8px; align-items:center; margin:12px 0 4px; }
-  .tools.open { display:flex; }
-  .gear { font-size:14px; padding:6px 12px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--text); cursor:pointer; }
-  .top { display:flex; align-items:center; gap:12px; margin-bottom:12px; }
-  .top h1 { margin:0; }
-  .tools .lbl { color:var(--muted); font-size:14px; }
-  .tools .sep { width:12px; }
-  input { font-size:16px; padding:8px 10px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--text); }
-  button.small { font-size:14px; padding:8px 12px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--text); cursor:pointer; }
-  main { padding:20px 24px 40px; }
-  .panel { background:var(--card); border-radius:14px; padding:20px; border:1px solid var(--line); }
-  .bar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:16px; }
-  .bar .title { font-size:18px; font-weight:600; margin-right:auto; }
-  .grid { display:flex; flex-wrap:wrap; gap:12px; }
-  .pt { min-width:120px; height:84px; font-size:28px; border:0; border-radius:14px; background:var(--blue); color:#fff; cursor:pointer; padding:0 18px; }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:#0a0b0d; --surface:#15171b; --soft:#1c1f24; --ink:#f1f2f4; --on-ink:#0e0f11;
+      --muted:#9aa2af; --line:#2a2e35; --tile:#262a31; --on-tile:#ffffff;
+      --ok:#34d27b; --on-ok:#05200f; --ok-soft:#10301f;
+      --warn:#f0b429; --warn-soft:#3a2d0c;
+      --bad:#ff6a70; --bad-soft:#3b1618;
+    }
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html { -webkit-text-size-adjust:100%; }
+  body { margin:0; font-family:var(--font); background:var(--bg); color:var(--ink); font-size:16px; line-height:1.45; }
+  button, input, summary { font-family:inherit; }
+  button { cursor:pointer; }
+  :focus-visible { outline:3px solid var(--ok); outline-offset:2px; }
+  svg.i { width:20px; height:20px; flex:none; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+
+  /* ---------- ส่วนหัว ---------- */
+  .top { position:sticky; top:0; z-index:20; background:var(--bg); border-bottom:1px solid var(--line);
+         padding:calc(10px + env(safe-area-inset-top,0px)) 16px 10px; }
+  .top-in { max-width:1040px; margin:0 auto; display:flex; align-items:center; gap:12px; }
+  .logo { width:46px; height:46px; border-radius:50%; flex:none; box-shadow:0 0 0 1px var(--line); }
+  .brand { min-width:0; margin-right:auto; }
+  .brand h1 { margin:0; font-size:20px; line-height:1.15; font-weight:700; letter-spacing:-.01em; }
+  .brand p { margin:2px 0 0; font-size:12.5px; color:var(--muted); letter-spacing:.14em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .brand p.live { letter-spacing:0; font-size:13px; color:var(--ok); }
+  .icbtn { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:46px; padding:0 16px;
+           border-radius:14px; border:1px solid var(--line); background:var(--surface); color:var(--ink); font-size:15px; font-weight:600; }
+  .icbtn.sq { width:46px; padding:0; }
+  .prog { position:fixed; left:0; right:0; top:0; height:3px; z-index:50; overflow:hidden; opacity:0; transition:opacity .2s; pointer-events:none; }
+  .prog.on { opacity:1; }
+  .prog::before { content:""; position:absolute; top:0; bottom:0; width:40%; background:var(--ok); border-radius:3px; animation:slide 1.1s ease-in-out infinite; }
+  @keyframes slide { 0% { left:-40%; } 100% { left:100%; } }
+
+  /* ---------- โครงหน้า ---------- */
+  main { max-width:1040px; margin:0 auto; padding:16px 16px calc(90px + env(safe-area-inset-bottom,0px)); }
+  .layout { display:grid; grid-template-columns:minmax(0,1fr); gap:18px; }
+  @media (min-width:880px) { .layout { grid-template-columns:270px minmax(0,1fr); align-items:start; } .side { position:sticky; top:84px; } }
+  .step { display:flex; align-items:center; gap:10px; font-size:15px; font-weight:700; margin:0 0 10px; }
+  .step .n { width:26px; height:26px; border-radius:50%; background:var(--ink); color:var(--on-ink); display:grid; place-items:center; font-size:13px; font-weight:700; }
+
+  /* ---------- เลือกหุ่น ---------- */
+  .robots { display:flex; gap:10px; overflow-x:auto; padding:2px 2px 8px; margin:0 -2px; scroll-snap-type:x proximity; }
+  @media (min-width:880px) { .robots { flex-direction:column; overflow:visible; } }
+  .rcard { scroll-snap-align:start; flex:none; min-width:168px; display:flex; align-items:center; gap:12px; text-align:left;
+           padding:12px 16px; min-height:64px; border-radius:16px; border:2px solid var(--line); background:var(--surface); color:var(--ink); }
+  @media (min-width:880px) { .rcard { min-width:0; width:100%; } }
+  .rcard.sel { border-color:var(--ink); box-shadow:0 0 0 1px var(--ink) inset; }
+  .rcard.group { border-style:dashed; }
+  .rtxt { display:flex; flex-direction:column; min-width:0; }
+  .rname { font-size:16px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .rsub { font-size:12.5px; color:var(--muted); }
+  .mtag { display:inline-block; margin-left:6px; padding:0 8px; border-radius:999px; background:var(--soft); border:1px solid var(--line); font-size:11.5px; font-weight:700; color:var(--ink); }
+  .dot { width:12px; height:12px; border-radius:50%; background:#8b93a0; flex:none; }
+  .dot.on { background:var(--ok); } .dot.off { background:var(--bad); } .dot.warn { background:var(--warn); }
+
+  /* ---------- แผงสั่งงาน ---------- */
+  .panel { background:var(--surface); border:1px solid var(--line); border-radius:22px; padding:20px; }
+  .phead { display:flex; flex-wrap:wrap; align-items:flex-start; gap:10px 16px; margin-bottom:14px; }
+  .phead .ttl { margin-right:auto; min-width:0; }
+  .phead h2 { margin:0; font-size:24px; line-height:1.2; font-weight:700; letter-spacing:-.01em; overflow-wrap:anywhere; }
+  .phead .psub { margin:2px 0 0; color:var(--muted); font-size:14px; }
+  .pill { display:inline-flex; align-items:center; gap:8px; padding:7px 14px; border-radius:999px; font-size:14.5px; font-weight:700; background:var(--soft); color:var(--ink); border:1px solid var(--line); }
+  .pill:empty { display:none; }
+  .pill.free { background:var(--ok-soft); color:var(--ok); border-color:transparent; }
+  .pill.wait { background:var(--warn-soft); color:var(--warn); border-color:transparent; }
+  .pill.bad { background:var(--bad-soft); color:var(--bad); border-color:transparent; }
+  .batt { display:inline-flex; align-items:center; gap:6px; font-variant-numeric:tabular-nums; }
+  .batt i { position:relative; display:inline-block; width:24px; height:12px; border-radius:3px; border:2px solid currentColor; }
+  .batt i::after { content:""; position:absolute; right:-5px; top:2px; width:2px; height:4px; background:currentColor; border-radius:0 2px 2px 0; }
+  .batt i b { position:absolute; left:1px; top:1px; bottom:1px; background:currentColor; border-radius:1px; }
+
+  .quick { display:flex; flex-wrap:wrap; gap:10px; align-items:flex-start; margin-bottom:18px; }
+  .btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:48px; padding:0 18px; border-radius:14px;
+         border:1px solid var(--line); background:var(--surface); color:var(--ink); font-size:15.5px; font-weight:600; }
+  .btn:disabled { opacity:.45; cursor:default; }
+  .btn.primary { background:var(--ink); color:var(--on-ink); border-color:var(--ink); }
+  .btn.go { background:var(--ok); color:var(--on-ok); border-color:transparent; font-size:19px; font-weight:700; min-height:60px; padding:0 28px; border-radius:16px; }
+  .btn.warnline { color:var(--bad); }
+  details.manage { flex:0 0 auto; }
+  details.manage[open] { flex:1 1 100%; }
+  details.manage summary { list-style:none; display:inline-flex; align-items:center; gap:8px; min-height:48px; padding:0 18px; border-radius:14px;
+                           border:1px solid var(--line); background:var(--surface); font-size:15.5px; font-weight:600; cursor:pointer; user-select:none; }
+  details.manage summary::-webkit-details-marker { display:none; }
+  details.manage[open] summary { background:var(--soft); }
+  details.manage .mbox { display:flex; flex-wrap:wrap; gap:10px; margin-top:10px; padding:14px; border-radius:16px; background:var(--soft); border:1px solid var(--line); }
+  details.manage .mbox p { flex:1 1 100%; margin:0; font-size:13.5px; color:var(--muted); }
+  .hint { margin:0 0 12px; color:var(--muted); font-size:14.5px; }
+
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(132px,1fr)); gap:12px; }
+  .pt { position:relative; min-height:92px; padding:10px 14px; border:2px solid transparent; border-radius:18px; background:var(--tile); color:var(--on-tile);
+        font-size:26px; font-weight:700; line-height:1.15; overflow-wrap:anywhere; display:flex; align-items:center; justify-content:center; gap:10px; text-align:center;
+        transition:transform .08s; }
+  .pt:active:not(:disabled) { transform:scale(.97); }
   .pt:disabled { opacity:.45; cursor:wait; }
-  .pt.on { background:#174fa8; outline:3px solid var(--text); }
-  .badge { display:inline-block; width:30px; height:30px; line-height:30px; border-radius:50%; background:#fff; color:#174fa8; font-size:17px; font-weight:700; margin-right:10px; vertical-align:middle; }
-  .actions { display:flex; gap:10px; margin-top:18px; align-items:center; }
-  .actions .hint { color:var(--muted); font-size:14px; }
-  button.start { font-size:18px; padding:12px 22px; border-radius:10px; border:0; background:var(--green); color:#fff; cursor:pointer; }
-  button.start:disabled { opacity:.45; cursor:default; }
-  #alerts { display:flex; flex-direction:column; gap:10px; margin-bottom:16px; }
-  .alert { display:flex; align-items:center; gap:16px; flex-wrap:wrap; padding:16px 20px; border-radius:14px; border:2px solid #e0a100; background:var(--card); }
-  .alert .txt { font-size:20px; font-weight:600; margin-right:auto; }
-  .alert button { font-size:24px; padding:12px 40px; border-radius:12px; border:0; background:var(--green); color:#fff; cursor:pointer; }
-  .chip.group { border-style:dashed; }
-  .rlist { margin-top:20px; display:flex; flex-direction:column; gap:8px; }
-  .rrow { display:flex; gap:10px; align-items:center; font-size:16px; }
-  .tag { padding:2px 12px; border-radius:999px; font-size:13px; background:var(--line); color:var(--text); }
-  .tag.bad { background:var(--red); color:#fff; }
-  .alert.danger { border-color:var(--red); }
-  .tag.free { background:var(--green); color:#fff; } .tag.wait { background:#e0a100; color:#fff; }
-  .seen { font-size:12px; color:var(--muted); margin-left:6px; }
-  .gmsg { margin-top:16px; min-height:24px; color:var(--muted); font-size:16px; }
-  #msg { margin-top:18px; min-height:24px; color:var(--muted); font-size:16px; }
+  .pt.on { border-color:var(--ok); box-shadow:0 0 0 3px var(--ok); }
+  .badge { flex:none; width:32px; height:32px; line-height:32px; border-radius:50%; background:var(--ok); color:var(--on-ok); font-size:17px; font-weight:700; }
+  .actions { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-top:18px; }
+  .actions:empty { display:none; }
+  .actions.stick { position:sticky; bottom:calc(10px + env(safe-area-inset-bottom,0px)); padding:12px; margin:18px -8px 0; border-radius:20px; background:var(--surface); border:1px solid var(--line); box-shadow:0 8px 28px rgba(0,0,0,.18); }
+  .actions .go { flex:1 1 0; min-width:150px; }
+  .emptybox { grid-column:1 / -1; display:flex; flex-direction:column; align-items:center; gap:12px; text-align:center; padding:34px 16px; border-radius:18px; border:2px dashed var(--line); color:var(--muted); }
+  .emptybox h3 { margin:0; font-size:18px; color:var(--ink); }
+  .emptybox p { margin:0; max-width:34ch; }
+  .emptybox svg.art { width:72px; height:72px; color:var(--muted); }
+
+  /* ---------- แจ้งเตือนหุ่นถึงแล้ว / ฉุกเฉิน ---------- */
+  #alerts { display:flex; flex-direction:column; gap:12px; }
+  #alerts:not(:empty) { margin-bottom:18px; }
+  .alert { display:flex; align-items:center; flex-wrap:wrap; gap:14px 18px; padding:18px 20px; border-radius:22px; background:var(--warn-soft); border:2px solid var(--warn); }
+  .alert .ring { position:relative; width:48px; height:48px; border-radius:50%; background:var(--warn); color:#fff; display:grid; place-items:center; flex:none; }
+  .alert .ring::after { content:""; position:absolute; inset:-6px; border-radius:50%; border:3px solid var(--warn); opacity:0; animation:pulse 1.6s ease-out infinite; }
+  @keyframes pulse { 0% { transform:scale(.8); opacity:.9; } 100% { transform:scale(1.35); opacity:0; } }
+  .alert .txt { flex:1 1 200px; font-size:19px; font-weight:700; line-height:1.3; }
+  .alert .txt small { display:block; font-weight:500; font-size:15px; color:var(--muted); margin-top:2px; }
+  .alert .okbtn { flex:1 1 100%; min-height:64px; border-radius:16px; border:0; background:var(--ok); color:var(--on-ok); font-size:26px; font-weight:700; }
+  .alert .okbtn:disabled { opacity:.5; }
+  @media (min-width:600px) { .alert .okbtn { flex:0 0 200px; } }
+  .alert.danger { background:var(--bad-soft); border-color:var(--bad); }
+  .alert.danger .ring { background:var(--bad); }
+  .alert.danger .ring::after { border-color:var(--bad); }
+
+  /* ---------- เรียกหุ่นที่ว่าง ---------- */
+  .qbanner { display:flex; align-items:center; gap:12px; margin-bottom:14px; padding:12px 16px; border-radius:14px; background:var(--warn-soft); color:var(--warn); font-weight:700; }
+  .qbanner:empty { display:none; }
+  .spin { width:18px; height:18px; border-radius:50%; border:3px solid currentColor; border-right-color:transparent; animation:rot .8s linear infinite; flex:none; }
+  @keyframes rot { to { transform:rotate(360deg); } }
+  .rlist { margin-top:22px; display:flex; flex-direction:column; gap:8px; }
+  .rlist:empty { display:none; }
+  .rrow { display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px; padding:12px 14px; border-radius:14px; background:var(--soft); border:1px solid var(--line); font-size:16px; }
+  .rrow .nm { font-weight:700; margin-right:auto; }
+  .tag { padding:3px 12px; border-radius:999px; font-size:13.5px; font-weight:700; background:var(--surface); border:1px solid var(--line); }
+  .tag.free { background:var(--ok-soft); color:var(--ok); border-color:transparent; }
+  .tag.wait { background:var(--warn-soft); color:var(--warn); border-color:transparent; }
+  .tag.bad { background:var(--bad-soft); color:var(--bad); border-color:transparent; }
+  .seen { flex:1 1 100%; font-size:12px; color:var(--muted); word-break:break-all; }
   .empty { color:var(--muted); }
+
+  /* ---------- ข้อความแจ้งผล ---------- */
+  .toast { position:fixed; left:50%; bottom:calc(18px + env(safe-area-inset-bottom,0px)); z-index:60; transform:translate(-50%,20px); width:max-content; max-width:min(560px,calc(100vw - 28px));
+           padding:14px 20px; border-radius:16px; background:var(--ink); color:var(--on-ink); font-size:15.5px; font-weight:600; opacity:0; pointer-events:none; transition:opacity .2s, transform .2s; box-shadow:0 10px 30px rgba(0,0,0,.28); }
+  .toast.on { opacity:1; transform:translate(-50%,0); }
+
+  /* ---------- หน้าต่างตั้งค่า / ถามยืนยัน ---------- */
+  .overlay { position:fixed; inset:0; z-index:80; background:rgba(8,9,11,.55); display:flex; align-items:flex-end; justify-content:center; }
+  .overlay[hidden] { display:none; }
+  .sheet { width:100%; max-width:560px; max-height:92vh; overflow:auto; background:var(--surface); border-radius:24px 24px 0 0; padding:20px 20px calc(24px + env(safe-area-inset-bottom,0px)); animation:up .22s ease-out; }
+  @keyframes up { from { transform:translateY(40px); opacity:0; } to { transform:none; opacity:1; } }
+  @media (min-width:600px) { .overlay { align-items:center; } .sheet { border-radius:24px; } }
+  .shead { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+  .shead h3 { margin:0; font-size:21px; }
+  .sheet section { padding:16px 0; border-top:1px solid var(--line); }
+  .sheet section:first-of-type { border-top:0; }
+  .sheet h4 { margin:0 0 4px; font-size:16.5px; }
+  .help { margin:0 0 12px; color:var(--muted); font-size:14px; }
+  .field { display:flex; gap:10px; flex-wrap:wrap; }
+  input[type=text], input:not([type]) { flex:1 1 160px; min-width:0; min-height:48px; padding:0 14px; border-radius:14px; border:1px solid var(--line); background:var(--soft); color:var(--ink); font-size:16px; }
+  input:focus-visible { outline-offset:0; }
+  #findmsg { margin-top:10px; font-size:14px; color:var(--muted); }
+  details.adv { margin-top:12px; }
+  details.adv summary { cursor:pointer; color:var(--muted); font-size:14px; padding:6px 0; }
+  details.adv .field { margin-top:8px; align-items:center; }
+  .lbl { color:var(--muted); font-size:14px; }
+  .dlg h3 { margin:0 0 6px; font-size:20px; overflow-wrap:anywhere; }
+  .dlg p { margin:0 0 14px; color:var(--muted); font-size:15px; overflow-wrap:anywhere; }
+  .dlg .field { margin-bottom:16px; }
+  .dlg .row { display:flex; gap:10px; justify-content:flex-end; }
+  .dlg .row .btn { flex:1; }
+  .btn.bad { background:var(--bad); color:#fff; border-color:transparent; }
+
+  @media (max-width:420px) { .icbtn .t { display:none; } .icbtn { width:46px; padding:0; } .panel { padding:16px; } .phead h2 { font-size:22px; } }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation:none !important; transition:none !important; } }
 </style>
 </head>
 <body>
-<header>
-  <div class="top"><h1>สั่ง AMR Keenon</h1><button class="gear" id="gear">⚙ ตั้งค่า / เพิ่มหุ่น</button></div>
-  <div class="robots" id="robots"></div>
-  <div class="tools">
-    <input id="newip" placeholder="IP หุ่น เช่น 192.168.50.137" size="22">
-    <button class="small" id="addrobot">+ เพิ่มหุ่นเอง</button>
-    <span class="sep"></span>
-    <span class="lbl">ค้นหาในวง</span>
-    <input id="subnet" size="12" title="3 ชุดแรกของ IP เช่น 192.168.50">
-    <span class="lbl">พอร์ต</span>
-    <input id="port" size="5">
-    <button class="small" id="find">🔍 ค้นหาหุ่นอัตโนมัติ</button>
-    <span id="findmsg" class="lbl"></span>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></symbol>
+    <symbol id="i-scan" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-pen" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24"><path d="M7.9 2h8.2L22 7.9v8.2L16.1 22H7.9L2 16.1V7.9z"/><path d="M12 8v5M12 16h.01"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></symbol>
+    <symbol id="i-tools" viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.4 2.4-2.6-.6-.6-2.6z"/></symbol>
+    <symbol id="i-group" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2 20a7 7 0 0 1 14 0"/><circle cx="17.5" cy="9" r="2.5"/><path d="M17 14.2A6 6 0 0 1 22 20"/></symbol>
+  </defs>
+</svg>
+
+<div class="prog" id="prog"></div>
+
+<header class="top">
+  <div class="top-in">
+    <img class="logo" id="logo" alt="LOGTHAI" src="data:image/png;base64,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">
+    <div class="brand">
+      <h1>Keenon Remote</h1>
+      <p id="brandsub">LOGTHAI SOLUTECH</p>
+    </div>
+    <button class="icbtn" id="gear" aria-label="ตั้งค่าและเพิ่มหุ่น"><svg class="i"><use href="#i-gear"/></svg><span class="t">ตั้งค่า</span></button>
   </div>
 </header>
+
 <main>
-  <div id="alerts"></div>
-  <div class="panel" id="rpanel">
-    <div class="bar">
-      <span class="title" id="title">-</span>
-      <button class="small" id="scan">สแกนจุดจากหุ่น</button>
-      <button class="small" id="addpt">+ เพิ่มจุดเอง</button>
-      <button class="small" id="retbtn">↩ กลับจุดพัก</button>
-      <button class="small" id="rename">✎ ตั้งชื่อ</button>
-      <button class="small" id="delrobot">ลบหุ่นคันนี้</button>
-    </div>
-    <div class="gmsg" id="rstat"></div>
-    <div class="grid" id="points"></div>
-    <div class="actions" id="actions"></div>
-    <div id="msg"></div>
-  </div>
-  <div class="panel" id="gpanel" style="display:none">
-    <div class="bar"><span class="title" id="gtitle">👥 เรียกหุ่นที่ว่าง</span></div>
-    <div class="grid" id="gpoints"></div>
-    <div class="actions" id="gactions"></div>
-    <div class="rlist" id="glist"></div>
-    <div class="gmsg" id="gmsg"></div>
+  <div id="alerts" aria-live="polite"></div>
+
+  <div class="layout">
+    <aside class="side">
+      <div class="step"><span class="n">1</span>เลือกหุ่น</div>
+      <div class="robots" id="robots"></div>
+    </aside>
+
+    <section>
+      <div class="panel" id="rpanel">
+        <div class="phead">
+          <div class="ttl"><h2 id="title">-</h2><p class="psub" id="psub"></p></div>
+          <div class="pill" id="rstat"></div>
+        </div>
+        <div class="quick" id="quick">
+          <button class="btn" id="retbtn"><svg class="i"><use href="#i-home"/></svg>กลับจุดพัก</button>
+          <details class="manage" id="manage">
+            <summary><svg class="i"><use href="#i-tools"/></svg>จัดการหุ่นคันนี้</summary>
+            <div class="mbox">
+              <p>ใช้เมื่อจุดหมายไม่ครบ หรืออยากเปลี่ยนชื่อ</p>
+              <button class="btn" id="scan"><svg class="i"><use href="#i-scan"/></svg>สแกนจุดจากหุ่น</button>
+              <button class="btn" id="addpt"><svg class="i"><use href="#i-plus"/></svg>เพิ่มจุดเอง</button>
+              <button class="btn" id="rename"><svg class="i"><use href="#i-pen"/></svg>ตั้งชื่อ</button>
+              <button class="btn warnline" id="delrobot"><svg class="i"><use href="#i-trash"/></svg>ลบหุ่นคันนี้</button>
+            </div>
+          </details>
+        </div>
+        <div class="step"><span class="n">2</span>เลือกจุดหมาย</div>
+        <p class="hint" id="hint"></p>
+        <div class="grid" id="points"></div>
+        <div class="actions" id="actions"></div>
+      </div>
+
+      <div class="panel" id="gpanel" style="display:none">
+        <div class="phead">
+          <div class="ttl"><h2 id="gtitle">เรียกหุ่นที่ว่าง</h2><p class="psub" id="gsub">ระบบเลือกคันที่ว่างให้อัตโนมัติ</p></div>
+        </div>
+        <div class="qbanner" id="gq"></div>
+        <div class="step"><span class="n">2</span>เลือกจุดหมาย</div>
+        <div class="grid" id="gpoints"></div>
+        <div class="actions" id="gactions"></div>
+        <div class="rlist" id="glist"></div>
+      </div>
+    </section>
   </div>
 </main>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<!-- ตั้งค่า / เพิ่มหุ่น -->
+<div class="overlay" id="sheetwrap" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheettitle">
+    <div class="shead"><h3 id="sheettitle">ตั้งค่า / เพิ่มหุ่น</h3><button class="icbtn sq" id="sheetclose" aria-label="ปิด"><svg class="i"><use href="#i-close"/></svg></button></div>
+    <section>
+      <h4>ค้นหาหุ่นอัตโนมัติ</h4>
+      <p class="help">กดเมื่อยังไม่เห็นหุ่นในรายการ ระบบจะหาหุ่นที่ต่อ WiFi เดียวกันให้เอง</p>
+      <button class="btn primary" id="find"><svg class="i"><use href="#i-search"/></svg>ค้นหาหุ่น</button>
+      <div id="findmsg"></div>
+      <details class="adv">
+        <summary>ตั้งค่าขั้นสูง (ปกติไม่ต้องแก้)</summary>
+        <div class="field">
+          <span class="lbl">ค้นหาในวง</span>
+          <input id="subnet" size="12" title="3 ชุดแรกของ IP เช่น 192.168.50">
+          <span class="lbl">พอร์ต</span>
+          <input id="port" size="5" inputmode="numeric">
+        </div>
+      </details>
+    </section>
+    <section>
+      <h4>เพิ่มหุ่นด้วยตัวเอง</h4>
+      <p class="help">ใส่เลข IP ของแท็บเล็ตที่ติดบนหุ่น (ดูได้จากหน้าจอแอพ Keenon Remote)</p>
+      <div class="field">
+        <input id="newip" placeholder="เช่น 192.168.50.137" inputmode="decimal">
+        <button class="btn primary" id="addrobot"><svg class="i"><use href="#i-plus"/></svg>เพิ่มหุ่น</button>
+      </div>
+    </section>
+  </div>
+</div>
+
+<!-- กล่องถาม / ยืนยัน -->
+<div class="overlay" id="dlg" hidden>
+  <div class="sheet dlg" role="dialog" aria-modal="true">
+    <h3 id="dlgTitle"></h3>
+    <p id="dlgDesc"></p>
+    <div class="field" id="dlgField"><input id="dlgInput" maxlength="40"></div>
+    <div class="row"><button class="btn" id="dlgCancel">ยกเลิก</button><button class="btn primary" id="dlgOk">ตกลง</button></div>
+  </div>
+</div>
 
 <script>
 var LS = 'keenon_hub_v1';
@@ -117,11 +330,31 @@ var picks = {};          // ip -> จุดที่เลือกไว้ต�
 var served = location.protocol.indexOf('http') === 0;
 if (served && location.port) { state.port = parseInt(location.port, 10); }
 
+// ---------- ตัวช่วยสร้างหน้าจอ ----------
+function $(id) { return document.getElementById(id); }
+function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+function ico(name) {
+  var s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('class', 'i');
+  var u = document.createElementNS('http://www.w3.org/2000/svg', 'use'); u.setAttribute('href', '#i-' + name);
+  s.appendChild(u); return s;
+}
+function modelTxt(r) { return r.mode === 'diner' ? 'T9' : r.mode === 'industry' ? 'S100' : ''; }
+var toastT;
+function toast(t, stick) {
+  var e = $('toast'); clearTimeout(toastT);
+  if (!t) { e.className = 'toast'; return; }
+  e.textContent = t; e.className = 'toast on';
+  if (!stick) toastT = setTimeout(function () { e.className = 'toast'; }, 9000);
+}
+function setMsg(t) { toast(t, /^กำลัง/.test(t)); }
+function gmsg(t) { toast(t, /^กำลัง/.test(t)); }
+var finding = false, dispatching = false;
+function syncBar() { $('prog').className = 'prog' + ((busy || finding || dispatching) ? ' on' : ''); }
+
 function save() { try { localStorage.setItem(LS, JSON.stringify(state)); } catch (e) {} }
 function base(ip) { return 'http://' + (ip.indexOf(':') < 0 ? ip + ':' + (state.port || 8080) : ip); }
 function nm(r) { return r.name ? r.name + ' (' + r.ip + ')' : r.ip; }
 function nmIp(ip) { var f = state.robots.filter(function (r) { return r.ip === ip; })[0]; return f ? nm(f) : ip; }
-function setMsg(t) { document.getElementById('msg').textContent = t; }
 
 function api(ip, path, ms) {
   var c = new AbortController();
@@ -131,63 +364,112 @@ function api(ip, path, ms) {
     .catch(function (e) { clearTimeout(t); throw e; });
 }
 
-function render() {
-  var gv = !!groupMode && groupRobots().length >= 2;
-  var box = document.getElementById('robots');
-  box.innerHTML = '';
+// ---------- กล่องถาม / ยืนยัน (แทน prompt / confirm) ----------
+function openDialog(o, cb) {
+  $('dlgTitle').textContent = o.title; $('dlgDesc').textContent = o.desc || '';
+  $('dlgDesc').style.display = o.desc ? '' : 'none';
+  $('dlgField').style.display = o.input ? '' : 'none';
+  var inp = $('dlgInput'); inp.value = o.value || ''; inp.placeholder = o.placeholder || '';
+  var ok = $('dlgOk'); ok.textContent = o.okText || 'ตกลง'; ok.className = 'btn ' + (o.danger ? 'bad' : 'primary');
+  function close(v) { $('dlg').hidden = true; ok.onclick = null; $('dlgCancel').onclick = null; inp.onkeydown = null; if (v !== null) cb(o.input ? inp.value : true); }
+  ok.onclick = function () { close(true); };
+  $('dlgCancel').onclick = function () { close(null); };
+  inp.onkeydown = function (e) { if (e.key === 'Enter') close(true); if (e.key === 'Escape') close(null); };
+  $('dlg').hidden = false;
+  if (o.input) setTimeout(function () { inp.focus(); inp.select(); }, 50);
+}
+
+// ---------- วาดหน้าจอ ----------
+function renderRobots(gv) {
+  var box = $('robots'); box.innerHTML = '';
   state.robots.forEach(function (r, i) {
-    var b = document.createElement('button');
-    b.className = 'chip' + (!gv && i === state.sel ? ' sel' : '');
-    var d = document.createElement('span');
-    d.className = 'dot ' + (robotStatus[r.ip] || '');
-    b.appendChild(d);
-    b.appendChild(document.createTextNode(r.name ? r.name + ' · ' + r.ip : r.ip));
+    var b = el('button', 'rcard' + (!gv && i === state.sel ? ' sel' : ''));
+    var d = el('span', 'dot ' + (robotStatus[r.ip] || ''));
+    d.title = robotStatus[r.ip] === 'off' ? 'ติดต่อไม่ได้' : robotStatus[r.ip] === 'warn' ? 'ยังไม่เปิด Accessibility' : robotStatus[r.ip] === 'on' ? 'เชื่อมต่อแล้ว' : '';
+    var t = el('span', 'rtxt');
+    t.appendChild(el('span', 'rname', r.name || r.ip));
+    var sub = el('span', 'rsub', r.name ? r.ip : '');
+    var mt = modelTxt(r);
+    if (mt) sub.appendChild(el('span', 'mtag', mt));
+    if (r.name || mt) t.appendChild(sub);
+    b.appendChild(d); b.appendChild(t);
     b.onclick = function () { state.sel = i; groupMode = null; state.groupMode = null; save(); render(); };
     box.appendChild(b);
   });
   ['diner', 'industry'].forEach(function (m) {
     var n = groupRobots(m).length;
     if (n < 2) return;
-    var gb = document.createElement('button');
-    gb.className = 'chip group' + (gv && groupMode === m ? ' sel' : '');
-    gb.textContent = '👥 เรียกหุ่นที่ว่าง ' + (m === 'diner' ? 'T9' : 'S100') + ' (' + n + ' คัน)';
+    var gb = el('button', 'rcard group' + (gv && groupMode === m ? ' sel' : ''));
+    gb.appendChild(ico('group'));
+    var t = el('span', 'rtxt');
+    t.appendChild(el('span', 'rname', 'เรียกคันที่ว่าง'));
+    var sub = el('span', 'rsub', n + ' คัน');
+    sub.appendChild(el('span', 'mtag', m === 'diner' ? 'T9' : 'S100'));
+    t.appendChild(sub); gb.appendChild(t);
     gb.onclick = function () { groupMode = m; state.groupMode = m; save(); render(); };
     box.appendChild(gb);
   });
-  document.getElementById('rpanel').style.display = gv ? 'none' : '';
-  document.getElementById('gpanel').style.display = gv ? '' : 'none';
+}
+
+function pointTile(p, idx, multi) {
+  var b = el('button', 'pt');
+  if (multi && idx >= 0) { b.className += ' on'; b.appendChild(el('span', 'badge', String(idx + 1))); }
+  b.appendChild(el('span', '', p));
+  return b;
+}
+
+function emptyBox(title, text, btnText, fn) {
+  var d = el('div', 'emptybox');
+  var s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('class', 'art'); s.setAttribute('viewBox', '0 0 48 48');
+  s.innerHTML = '<g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><circle cx="24" cy="24" r="3"/><path d="M15 15a13 13 0 0 0 0 18"/><path d="M33 15a13 13 0 0 1 0 18"/><path d="M9 9a21 21 0 0 0 0 30"/><path d="M39 9a21 21 0 0 1 0 30"/></g>';
+  d.appendChild(s); d.appendChild(el('h3', '', title)); d.appendChild(el('p', '', text));
+  if (btnText) { var b = el('button', 'btn primary', btnText); b.onclick = fn; d.appendChild(b); }
+  return d;
+}
+
+function render() {
+  var gv = !!groupMode && groupRobots().length >= 2;
+  renderRobots(gv);
+  $('rpanel').style.display = gv ? 'none' : '';
+  $('gpanel').style.display = gv ? '' : 'none';
+  syncBar();
   if (gv) { renderGroup(); return; }
   var cur = state.robots[state.sel];
-  document.getElementById('title').textContent = cur ? 'หุ่น ' + nm(cur) + (cur.mode === 'diner' ? ' (T9)' : cur.mode === 'industry' ? ' (S100)' : '') + ' — เลือกจุดที่ต้องการให้ไป' : 'ยังไม่มีหุ่น เพิ่ม IP ด้านบนก่อน';
-  document.getElementById('retbtn').style.display = (cur && cur.mode === 'diner') ? '' : 'none';
-  document.getElementById('rename').style.display = cur ? '' : 'none';
+  $('title').textContent = cur ? (cur.name || cur.ip) : 'ยังไม่มีหุ่น';
+  var ps = $('psub'); ps.textContent = '';
+  if (cur) { if (cur.name) ps.textContent = cur.ip + (modelTxt(cur) ? '  ' : ''); if (modelTxt(cur)) ps.appendChild(el('span', 'mtag', modelTxt(cur))); }
+  $('retbtn').style.display = (cur && cur.mode === 'diner') ? '' : 'none';
+  $('manage').style.display = cur ? '' : 'none';
+  $('rename').style.display = cur ? '' : 'none';
+  $('quick').style.display = cur ? '' : 'none';
   updateRstat();
-  var g = document.getElementById('points'); g.innerHTML = '';
-  if (!cur) return;
-  if (!cur.points.length) { g.innerHTML = '<span class="empty">ยังไม่มีจุด กด "สแกนจุดจากหุ่น" หรือ "+ เพิ่มจุดเอง"</span>'; }
+  var g = $('points'); g.innerHTML = '';
+  var act = $('actions'); act.innerHTML = ''; act.className = 'actions';
+  if (!cur) {
+    $('hint').textContent = '';
+    g.appendChild(emptyBox('ยังไม่มีหุ่นในรายการ', 'กดค้นหา ระบบจะหาหุ่นที่ต่อ WiFi เดียวกันให้เอง', 'ค้นหาหุ่น', openSheet));
+    return;
+  }
   var multi = (cur.max || 1) > 1;
+  $('hint').textContent = multi ? 'แตะเลือกจุดตามลำดับ (สูงสุด ' + cur.max + ' จุด) แล้วกดปุ่มส่งหุ่นด้านล่าง' : 'แตะที่จุดหมาย หุ่นจะออกเดินทางทันที';
+  if (!cur.points.length) {
+    g.appendChild(emptyBox('ยังไม่มีจุดหมาย', 'ให้แท็บเล็ตบนหุ่นอ่านรายชื่อจุดให้ (แท็บเล็ตจะเปิดแอพ Industry เอง)', 'สแกนจุดจากหุ่น', scan));
+  }
   var sel = picks[cur.ip] = picks[cur.ip] || [];
   cur.points.forEach(function (p) {
-    var b = document.createElement('button'); b.className = 'pt'; b.disabled = busy;
-    var idx = sel.indexOf(p);
-    if (multi && idx >= 0) {
-      b.className += ' on';
-      var bd = document.createElement('span'); bd.className = 'badge'; bd.textContent = idx + 1;
-      b.appendChild(bd); b.appendChild(document.createTextNode(p));
-    } else { b.textContent = p; }
+    var b = pointTile(p, sel.indexOf(p), multi); b.disabled = busy;
     b.onclick = function () { if (multi) toggle(cur, p); else go([p]); };
     g.appendChild(b);
   });
-  var act = document.getElementById('actions'); act.innerHTML = '';
   if (multi) {
-    var st = document.createElement('button'); st.className = 'start';
-    st.textContent = '▶ ส่งหุ่นไป ' + sel.length + ' จุด'; st.disabled = busy || !sel.length;
+    act.className = 'actions stick';
+    var st = el('button', 'btn go'); st.appendChild(ico('send'));
+    st.appendChild(document.createTextNode(sel.length ? 'ส่งหุ่นไป ' + sel.length + ' จุด' : 'เลือกจุดก่อน'));
+    st.disabled = busy || !sel.length;
     st.onclick = function () { go(sel.slice()); };
-    var cl = document.createElement('button'); cl.className = 'small'; cl.textContent = 'ล้างที่เลือก'; cl.disabled = busy || !sel.length;
+    var cl = el('button', 'btn', 'ล้างที่เลือก'); cl.disabled = busy || !sel.length;
     cl.onclick = function () { picks[cur.ip] = []; render(); };
-    var hint = document.createElement('span'); hint.className = 'hint';
-    hint.textContent = 'เลือกได้สูงสุด ' + cur.max + ' จุด หุ่นจะไปตามลำดับเลขที่เลือก';
-    act.appendChild(st); act.appendChild(cl); act.appendChild(hint);
+    act.appendChild(st); act.appendChild(cl);
   }
 }
 
@@ -201,11 +483,12 @@ function toggle(cur, p) {
 }
 
 function addRobot() {
-  var v = document.getElementById('newip').value.trim();
+  var v = $('newip').value.trim();
   if (!v) return;
-  document.getElementById('newip').value = '';
-  if (state.robots.some(function (r) { return r.ip === v; })) return;
-  state.robots.push({ ip: v, points: [] }); state.sel = state.robots.length - 1;
+  $('newip').value = '';
+  closeSheet();
+  if (state.robots.some(function (r) { return r.ip === v; })) { setMsg('มีหุ่นเครื่องนี้ในรายการแล้ว'); return; }
+  state.robots.push({ ip: v, points: [] }); state.sel = state.robots.length - 1; groupMode = null; state.groupMode = null;
   save(); render(); pingAll(); scan();
 }
 
@@ -231,6 +514,7 @@ function sendReturn(r) {
 
 function scan() {
   var r = state.robots[state.sel]; if (!r || busy) return;
+  $('manage').open = false;
   busy = true; render(); setMsg('กำลังอ่านรายชื่อจุดจาก ' + r.ip + ' (แท็บเล็ตจะเปิดแอพ Industry เอง) ...');
   api(r.ip, '/points', 40000)
     .then(function (j) {
@@ -250,29 +534,40 @@ function pingAll() {
   });
 }
 
-document.getElementById('scan').onclick = scan;
-document.getElementById('retbtn').onclick = function () { sendReturn(state.robots[state.sel]); };
-document.getElementById('rename').onclick = function () {
+$('scan').onclick = scan;
+$('retbtn').onclick = function () { sendReturn(state.robots[state.sel]); };
+$('rename').onclick = function () {
   var r = state.robots[state.sel]; if (!r) return;
-  var n = prompt('ตั้งชื่อหุ่นคันนี้ (IP ' + r.ip + ') เว้นว่างเพื่อลบชื่อ', r.name || '');
-  if (n === null) return;
-  r.name = n.trim().slice(0, 40); save(); render();
-  api(r.ip, '/setname?name=' + encodeURIComponent(r.name), 5000).catch(function () {});
+  $('manage').open = false;
+  openDialog({ title: 'ตั้งชื่อหุ่นคันนี้', desc: 'IP ' + r.ip + ' · เว้นว่างไว้เพื่อลบชื่อ', input: true, value: r.name || '', placeholder: 'เช่น หุ่นหน้าร้าน' }, function (v) {
+    r.name = v.trim().slice(0, 40); save(); render();
+    api(r.ip, '/setname?name=' + encodeURIComponent(r.name), 5000).catch(function () {});
+  });
 };
-document.getElementById('addpt').onclick = function () {
+$('addpt').onclick = function () {
   var r = state.robots[state.sel]; if (!r) return;
-  var n = prompt('ชื่อจุด (ต้องตรงกับที่แสดงในแอพ Industry)'); if (!n) return;
-  n = n.trim(); if (n && r.points.indexOf(n) < 0) { r.points.push(n); save(); render(); }
+  $('manage').open = false;
+  openDialog({ title: 'เพิ่มจุดหมายเอง', desc: 'พิมพ์ชื่อจุดให้ตรงกับที่แสดงในแอพ Industry', input: true, placeholder: 'ชื่อจุด' }, function (v) {
+    var n = v.trim(); if (n && r.points.indexOf(n) < 0) { r.points.push(n); save(); render(); }
+  });
 };
-document.getElementById('delrobot').onclick = function () {
+$('delrobot').onclick = function () {
   var r = state.robots[state.sel]; if (!r) return;
-  if (!confirm('ลบหุ่น ' + r.ip + ' ?')) return;
-  state.robots.splice(state.sel, 1); state.sel = 0; save(); render();
+  $('manage').open = false;
+  openDialog({ title: 'ลบหุ่นคันนี้?', desc: nm(r) + ' จะหายไปจากรายการ (ค้นหาใหม่ได้ภายหลัง)', okText: 'ลบหุ่น', danger: true }, function () {
+    state.robots.splice(state.sel, 1); state.sel = 0; save(); render();
+  });
 };
 
+// ---------- หน้าตั้งค่า ----------
+function openSheet() { $('sheetwrap').hidden = false; }
+function closeSheet() { $('sheetwrap').hidden = true; }
+$('gear').onclick = openSheet;
+$('sheetclose').onclick = closeSheet;
+$('sheetwrap').onclick = function (e) { if (e.target === this) closeSheet(); };
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !$('sheetwrap').hidden) closeSheet(); });
 
 // ---------- ค้นหาหุ่นอัตโนมัติ ----------
-var finding = false;
 function guessSubnet() {
   if (served && /^\d+\.\d+\.\d+\.\d+$/.test(location.hostname)) return location.hostname.split('.').slice(0, 3).join('.');
   if (state.subnet) return state.subnet;
@@ -281,11 +576,11 @@ function guessSubnet() {
 }
 function discover() {
   if (finding) return;
-  var sub = document.getElementById('subnet').value.trim().replace(/\.$/, '');
-  var port = parseInt(document.getElementById('port').value, 10) || 8080;
-  if (!/^\d+\.\d+\.\d+$/.test(sub)) { document.getElementById('findmsg').textContent = 'ใส่ 3 ชุดแรกของ IP เช่น 192.168.50'; return; }
+  var sub = $('subnet').value.trim().replace(/\.$/, '');
+  var port = parseInt($('port').value, 10) || 8080;
+  if (!/^\d+\.\d+\.\d+$/.test(sub)) { $('findmsg').textContent = 'ใส่ 3 ชุดแรกของ IP เช่น 192.168.50'; return; }
   state.subnet = sub; state.port = port; save();
-  finding = true; var fm = document.getElementById('findmsg');
+  finding = true; syncBar(); var fm = $('findmsg'); var bs = $('brandsub');
   var n = 1, done = 0, found = 0, total = 254;
   function worker() {
     if (n > total) return Promise.resolve();
@@ -301,22 +596,29 @@ function discover() {
         }
       })
       .catch(function () {})
-      .then(function () { done++; fm.textContent = 'กำลังค้นหา ' + done + '/' + total + ' พบใหม่ ' + found; return worker(); });
+      .then(function () {
+        done++;
+        fm.textContent = 'กำลังค้นหา ' + done + '/' + total + ' พบใหม่ ' + found;
+        bs.textContent = 'กำลังค้นหาหุ่น ' + Math.round(done * 100 / total) + '%'; bs.className = 'live';
+        return worker();
+      });
   }
   var pool = []; for (var i = 0; i < 40; i++) pool.push(worker());
   Promise.all(pool).then(function () {
     finding = false;
     fm.textContent = 'ค้นหาเสร็จ พบหุ่นใหม่ ' + found + ' คัน (รวม ' + state.robots.length + ' คัน)';
+    bs.textContent = 'LOGTHAI SOLUTECH'; bs.className = '';
     if (state.sel >= state.robots.length) state.sel = 0;
+    if (found) toast('พบหุ่นใหม่ ' + found + ' คัน');
     save(); render();
   });
 }
-document.getElementById('find').onclick = discover;
-document.getElementById('gear').onclick = function () { document.querySelector('.tools').classList.toggle('open'); };
-document.getElementById('port').onchange = function () { state.port = parseInt(this.value, 10) || 8080; save(); pingAll(); };
-document.getElementById('addrobot').onclick = addRobot;
-document.getElementById('subnet').value = guessSubnet();
-document.getElementById('port').value = state.port;
+$('find').onclick = discover;
+$('port').onchange = function () { state.port = parseInt(this.value, 10) || 8080; save(); pingAll(); };
+$('addrobot').onclick = addRobot;
+$('newip').onkeydown = function (e) { if (e.key === 'Enter') addRobot(); };
+$('subnet').value = guessSubnet();
+$('port').value = state.port;
 
 
 // ---------- หุ่น T9 ถึงจุดแล้ว: แสดงปุ่ม OK ในเว็บ ----------
@@ -329,28 +631,30 @@ function renderAlerts() {
   if (sig === lastSig) return;
   var fresh = (ips.length || wips.length) && sig.length > lastSig.length;
   lastSig = sig;
-  var box = document.getElementById('alerts'); box.innerHTML = '';
+  var box = $('alerts'); box.innerHTML = '';
   ips.forEach(function (ip) {
-    var d = document.createElement('div'); d.className = 'alert';
-    var t = document.createElement('span'); t.className = 'txt';
-    t.textContent = '🔔 หุ่น ' + nmIp(ip) + ' ถึงแล้ว' + (arrivals[ip] ? ' — ' + arrivals[ip] : '');
-    var b = document.createElement('button'); b.textContent = 'OK';
+    var d = el('div', 'alert');
+    var ring = el('span', 'ring'); ring.appendChild(ico('bell'));
+    var t = el('span', 'txt', 'หุ่น ' + nmIp(ip) + ' ถึงแล้ว');
+    if (arrivals[ip]) t.appendChild(el('small', '', arrivals[ip]));
+    var b = el('button', 'okbtn', 'OK');
     b.onclick = function () {
       b.disabled = true;
       api(ip, '/ok', 8000)
-        .then(function (j) { arrivals[ip] = null; setMsg(ip + ' : ' + j.msg); })
+        .then(function (j) { arrivals[ip] = null; setMsg(nmIp(ip) + ' : ' + j.msg); })
         .catch(function () { b.disabled = false; setMsg('กด OK ที่ ' + ip + ' ไม่ได้'); })
         .then(renderAlerts);
     };
-    d.appendChild(t); d.appendChild(b); box.appendChild(d);
+    d.appendChild(ring); d.appendChild(t); d.appendChild(b); box.appendChild(d);
   });
   wips.forEach(function (ip) {
-    var d = document.createElement('div'); d.className = 'alert danger';
-    var t = document.createElement('span'); t.className = 'txt';
-    t.textContent = '🛑 หุ่น ' + nmIp(ip) + ' ถูกกดปุ่มฉุกเฉิน — หมุนปุ่มฉุกเฉินที่ตัวหุ่นเพื่อปลดล็อก';
-    d.appendChild(t); box.appendChild(d);
+    var d = el('div', 'alert danger');
+    var ring = el('span', 'ring'); ring.appendChild(ico('stop'));
+    var t = el('span', 'txt', 'หุ่น ' + nmIp(ip) + ' ถูกกดปุ่มฉุกเฉิน');
+    t.appendChild(el('small', '', 'หมุนปุ่มฉุกเฉินที่ตัวหุ่นเพื่อปลดล็อก'));
+    d.appendChild(ring); d.appendChild(t); box.appendChild(d);
   });
-  document.title = (ips.length || wips.length) ? '🔔 Keenon Hub' : 'Keenon Hub';
+  document.title = (ips.length || wips.length) ? '🔔 Keenon Remote' : 'Keenon Remote';
   if (fresh) { try { var a = new (window.AudioContext || window.webkitAudioContext)(); var o = a.createOscillator(); o.connect(a.destination); o.frequency.value = 880; o.start(); setTimeout(function () { o.stop(); a.close(); }, 250); } catch (e) {} }
 }
 function pollArrivals() {
@@ -384,20 +688,31 @@ function isFree(r) {
 function robotLabel(r) {
   if (robotStatus[r.ip] === 'off') return ['ติดต่อไม่ได้', 'bad'];
   var st = robotState[r.ip];
-  if (st && st.state === 'estop') return ['🛑 กดปุ่มฉุกเฉินอยู่', 'bad'];
-  if (st && st.state === 'docking') return ['⚡ กำลังเข้าชาร์จ (จับคู่เสาชาร์จ)', 'wait'];
-  if (st && st.state === 'charging') return ['🔋 กำลังชาร์จแบต', 'wait'];
+  if (st && st.state === 'estop') return ['กดปุ่มฉุกเฉินอยู่', 'bad'];
+  if (st && st.state === 'docking') return ['กำลังเข้าชาร์จ (จับคู่เสาชาร์จ)', 'wait'];
+  if (st && st.state === 'charging') return ['กำลังชาร์จแบต', 'wait'];
   if (arrivals[r.ip] !== null && arrivals[r.ip] !== undefined) return ['รอกด OK', 'wait'];
   if (!st) return ['ไม่ทราบสถานะ', ''];
   if (isFree(r)) return [st.state === 'sleep' ? 'ว่าง (หน้าจอพัก)' : 'ว่าง', 'free'];
   return ['กำลังทำงาน', ''];
 }
+function battEl(pct) {
+  var b = el('span', 'batt'); var i = el('i'); var f = el('b'); f.style.width = Math.max(0, Math.min(100, pct)) * 0.8 + '%';
+  f.style.right = 'auto'; i.appendChild(f); b.appendChild(i); b.appendChild(document.createTextNode(pct + '%')); return b;
+}
 function updateRstat() {
-  var el = document.getElementById('rstat'); if (!el) return;
+  var e = $('rstat'); if (!e) return;
   var cur = state.robots[state.sel];
-  if (!cur || (cur.mode !== 'diner' && cur.mode !== 'industry')) { el.textContent = ''; return; }
+  e.innerHTML = ''; e.className = 'pill';
+  if (!cur) return;
+  if (cur.mode !== 'diner' && cur.mode !== 'industry') {
+    if (robotStatus[cur.ip] === 'off') { e.className = 'pill bad'; e.textContent = 'ติดต่อไม่ได้'; }
+    else if (robotStatus[cur.ip] === 'warn') { e.className = 'pill wait'; e.textContent = 'ยังไม่เปิด Accessibility'; }
+    return;
+  }
   var li = robotLabel(cur), st = robotState[cur.ip];
-  el.textContent = 'สถานะ: ' + li[0] + (st && st.battery >= 0 ? '  ·  🔋 ' + st.battery + '%' : '');
+  e.className = 'pill ' + li[1]; e.appendChild(document.createTextNode(li[0]));
+  if (st && st.battery >= 0) e.appendChild(battEl(st.battery));
 }
 function freeRobots(m) {
   var now = Date.now();
@@ -405,24 +720,19 @@ function freeRobots(m) {
     return isFree(r) && (now - (lastDispatch[r.ip] || 0) > 15000);
   }).sort(function (a, b) { return (lastDispatch[a.ip] || 0) - (lastDispatch[b.ip] || 0); });
 }
-function gmsg(t) { document.getElementById('gmsg').textContent = t; }
 function renderGroup() {
   var rs = groupRobots(), pts = [];
   rs.forEach(function (r) { r.points.forEach(function (p) { if (pts.indexOf(p) < 0) pts.push(p); }); });
-  document.getElementById('gtitle').textContent = '👥 เรียกหุ่นที่ว่าง ' + (groupMode === 'industry' ? 'S100' : 'T9') + ' — ระบบเลือกคันที่ว่างให้อัตโนมัติ';
+  $('gtitle').textContent = 'เรียกหุ่นที่ว่าง ' + (groupMode === 'industry' ? 'S100' : 'T9');
   var gk = '__g' + groupMode;
   var sel = picks[gk] = picks[gk] || [];
   var maxN = 4; rs.forEach(function (r) { maxN = Math.min(maxN, r.max || 4); });
-  var g = document.getElementById('gpoints'); g.innerHTML = '';
-  if (!pts.length) g.innerHTML = '<span class="empty">ยังไม่มีจุด เลือกหุ่นแต่ละคันแล้วกด "สแกนจุดจากหุ่น" ก่อน</span>';
+  var q = $('gq'); q.innerHTML = '';
+  if (queue) { q.appendChild(el('span', 'spin')); q.appendChild(document.createTextNode('กำลังรอหุ่นว่าง สำหรับ ' + queue.list.join(', '))); }
+  var g = $('gpoints'); g.innerHTML = '';
+  if (!pts.length) g.appendChild(emptyBox('ยังไม่มีจุดหมาย', 'เลือกหุ่นแต่ละคันแล้วกด "สแกนจุดจากหุ่น" ก่อน', null));
   pts.forEach(function (p) {
-    var b = document.createElement('button'); b.className = 'pt';
-    var idx = sel.indexOf(p);
-    if (idx >= 0) {
-      b.className += ' on';
-      var bd = document.createElement('span'); bd.className = 'badge'; bd.textContent = idx + 1;
-      b.appendChild(bd); b.appendChild(document.createTextNode(p));
-    } else b.textContent = p;
+    var b = pointTile(p, sel.indexOf(p), true);
     b.onclick = function () {
       var i = sel.indexOf(p);
       if (i >= 0) sel.splice(i, 1); else if (maxN === 1) { sel.length = 0; sel.push(p); } else if (sel.length < maxN) sel.push(p); else gmsg('เลือกได้สูงสุด ' + maxN + ' จุด');
@@ -430,49 +740,50 @@ function renderGroup() {
     };
     g.appendChild(b);
   });
-  var act = document.getElementById('gactions'); act.innerHTML = '';
-  var call = document.createElement('button'); call.className = 'start';
-  call.textContent = '▶ เรียกหุ่นที่ว่าง ' + sel.length + ' จุด'; call.disabled = !sel.length || !!queue;
+  var act = $('gactions'); act.innerHTML = ''; act.className = 'actions stick';
+  var call = el('button', 'btn go'); call.appendChild(ico('send'));
+  call.appendChild(document.createTextNode(sel.length ? 'เรียกหุ่นที่ว่างไป ' + sel.length + ' จุด' : 'เลือกจุดก่อน'));
+  call.disabled = !sel.length || !!queue;
   call.onclick = function () { callGroup(sel.slice()); };
-  var cl = document.createElement('button'); cl.className = 'small'; cl.textContent = 'ล้างที่เลือก'; cl.disabled = !sel.length;
+  var cl = el('button', 'btn', 'ล้างที่เลือก'); cl.disabled = !sel.length;
   cl.onclick = function () { picks[gk] = []; renderGroup(); };
   act.appendChild(call); act.appendChild(cl);
   if (groupMode === 'diner') {
-    var rt = document.createElement('button'); rt.className = 'small'; rt.textContent = '↩ ส่งคันที่ว่างกลับจุดพัก (1 คัน)'; rt.disabled = !!queue;
+    var rt = el('button', 'btn'); rt.appendChild(ico('home')); rt.appendChild(document.createTextNode('ส่งคันที่ว่างกลับจุดพัก (1 คัน)')); rt.disabled = !!queue;
     rt.onclick = function () { callGroup(['กลับจุดพัก'], 'return'); };
     act.appendChild(rt);
   }
   if (queue) {
-    var cq = document.createElement('button'); cq.className = 'small'; cq.textContent = 'ยกเลิกคิว (' + queue.list.join(', ') + ')';
+    var cq = el('button', 'btn', 'ยกเลิกคิว (' + queue.list.join(', ') + ')');
     cq.onclick = function () { queue = null; gmsg('ยกเลิกคิวแล้ว'); renderGroup(); };
     act.appendChild(cq);
   }
-  var l = document.getElementById('glist'); l.innerHTML = '';
+  var l = $('glist'); l.innerHTML = '';
   rs.forEach(function (r) {
-    var row = document.createElement('div'); row.className = 'rrow';
-    var d = document.createElement('span'); d.className = 'dot ' + (robotStatus[r.ip] || '');
+    var row = el('div', 'rrow');
     var lb = robotLabel(r);
-    var tg = document.createElement('span'); tg.className = 'tag ' + lb[1]; tg.textContent = lb[0];
-    row.appendChild(d); row.appendChild(document.createTextNode(nm(r) + ' ')); row.appendChild(tg);
+    row.appendChild(el('span', 'dot ' + (robotStatus[r.ip] || '')));
+    row.appendChild(el('span', 'nm', nm(r)));
+    row.appendChild(el('span', 'tag ' + lb[1], lb[0]));
     var st2 = robotState[r.ip];
-    if (st2 && st2.battery >= 0) { var bt = document.createElement('span'); bt.className = 'seen'; bt.textContent = '🔋 ' + st2.battery + '%'; row.appendChild(bt); }
-    if (st2 && lb[1] !== 'free' && ['estop', 'docking', 'charging'].indexOf(st2.state) < 0) { var sn = document.createElement('span'); sn.className = 'seen'; sn.textContent = '[' + st2.state + '] เห็น: ' + (st2.seen || []).slice(0, 8).join(' | '); row.appendChild(sn); }
+    if (st2 && st2.battery >= 0) { var bt = el('span', 'tag'); bt.appendChild(battEl(st2.battery)); row.appendChild(bt); }
+    if (st2 && lb[1] !== 'free' && ['estop', 'docking', 'charging'].indexOf(st2.state) < 0) row.appendChild(el('span', 'seen', '[' + st2.state + '] เห็น: ' + (st2.seen || []).slice(0, 8).join(' | ')));
     l.appendChild(row);
   });
+  syncBar();
 }
 function callGroup(list, type) {
   queue = { list: list, tries: 0, mode: groupMode, type: type || 'go' };
   gmsg('กำลังหาหุ่นที่ว่าง ...');
   renderGroup(); tryDispatch();
 }
-var dispatching = false;
 function tryDispatch() {
   if (!queue || dispatching) return;
   var fr = freeRobots(queue.mode);
   if (!fr.length) { gmsg('ทุกคันไม่ว่าง รอคิว: ' + queue.list.join(', ') + ' (จะส่งให้คันแรกที่ว่าง)'); return; }
   var r = fr[0], list = queue.list;
   dispatching = true; queue.tries++; lastDispatch[r.ip] = Date.now();
-  gmsg('ส่ง ' + nm(r) + ' ไป ' + list.join(', ') + ' ...'); renderGroup();
+  gmsg('กำลังส่ง ' + nm(r) + ' ไป ' + list.join(', ') + ' ...'); renderGroup();
   api(r.ip, queue.type === 'return' ? '/return' : '/go?point=' + encodeURIComponent(list.join(',')), 110000)
     .then(function (j) {
       if (/^sent/.test(j.msg)) { gmsg('✔ ' + nm(r) + ' รับงานแล้ว: ' + list.join(', ')); var qm = queue ? queue.mode : groupMode; queue = null; picks['__g' + qm] = []; }
@@ -487,6 +798,9 @@ function tryDispatch() {
 setInterval(tryDispatch, 1500);
 
 
+(function () {   // ใช้โลโก้เป็นไอคอนแท็บเบราว์เซอร์
+  ['icon', 'apple-touch-icon'].forEach(function (rel) { var l = document.createElement('link'); l.rel = rel; l.href = $('logo').src; document.head.appendChild(l); });
+})();
 render(); pingAll(); setInterval(pingAll, 5000);
 setTimeout(discover, 300);   // ค้นหาอัตโนมัติทุกครั้งที่เปิดหน้า
 </script>
