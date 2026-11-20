@@ -5,6 +5,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.graphics.Rect;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.view.accessibility.AccessibilityWindowInfo;
@@ -23,7 +24,8 @@ public class RobotAccessibilityService extends AccessibilityService {
     @Override public void onAccessibilityEvent(AccessibilityEvent e) { }
     @Override public void onInterrupt() { }
 
-    static int maxPoints() { return "diner".equals(mode) ? 4 : 1; }
+    static final int MAX_MULTI_INDUSTRY = 10;   // S100: จำนวนจุดสูงสุดต่อกล่อง (ปรับได้)
+    static int maxPoints() { return "diner".equals(mode) ? 4 : MAX_MULTI_INDUSTRY; }
     static final String[] OK_KEYS = { "OK", "ตกลง", "ยืนยันการรับ", "Confirm receipt" };
     static String[] startKeys() {
         return "diner".equals(mode)
@@ -119,7 +121,10 @@ public class RobotAccessibilityService extends AccessibilityService {
 
     String runOnce(String pointsCsv, String floor, long ms) {
         if ("diner".equals(mode)) return goDiner(pointsCsv, ms);
-        return goIndustry(pointsCsv.split(",")[0].trim(), floor, ms);
+        ArrayList<String> pts = parsePoints(pointsCsv, maxPoints());
+        if (pts.isEmpty()) return "no point";
+        if (pts.size() > 1) return goIndustryMulti(pts, 60000);   // S100 หลายจุด
+        return goIndustry(pts.get(0), floor, ms);                 // S100 จุดเดียว (ของเดิม)
     }
 
     /** ออกจากแอพหุ่น ปิดโปรเซส แล้วเปิดใหม่ เหมือนที่คนกดออกแล้วเข้าใหม่ */
@@ -194,6 +199,7 @@ public class RobotAccessibilityService extends AccessibilityService {
                 if (lastLaunch < 0) return "robot app not found";
                 sleep(500); continue;
             }
+            if (!pointClicked && find(root, ADD_BOX) != null) { performGlobalAction(GLOBAL_ACTION_BACK); sleep(900); continue; }   // หุ่นค้างหน้าสั่งหลายจุด -> ย้อนกลับ
             if (!pointClicked) {
                 AccessibilityNodeInfo p = find(root, point);
                 if (p != null) {
@@ -215,6 +221,219 @@ public class RobotAccessibilityService extends AccessibilityService {
         return "timeout (ลอง /dump ดูว่าปุ่มอ่านได้ไหม)";
     }
 
+    // ---------------------------------------------------------------- S100: สั่งหลายจุด
+    // ขั้นตอนในแอพ Industry: หลายจุด -> เพิ่มกล่องใหม่ -> แตะกล่อง -> กด + ที่จุด (ตามลำดับ) -> ตกลง -> เริ่มทำงาน
+    static final String MULTI_TILE = "หลายจุด";
+    static final String ADD_BOX = "เพิ่มกล่องใหม่";
+    static final String PICK_HINT = "กรุณาเลือกจุดเป้าหมาย";
+    static final String UNSELECTED = "ยังไม่ได้เลือกจุดเป้าหมาย";
+
+    static ArrayList<String> parsePoints(String csv, int max) {
+        ArrayList<String> pts = new ArrayList<String>();
+        if (csv == null) return pts;
+        for (String s : csv.split(",")) {
+            s = s.trim();
+            if (s.length() > 0 && pts.size() < max && !pts.contains(s)) pts.add(s);
+        }
+        return pts;
+    }
+
+    String goIndustryMulti(ArrayList<String> pts, long ms) {
+        StringBuilder sc = new StringBuilder();
+        for (int i = 0; i < pts.size(); i++) { if (i > 0) sc.append(","); sc.append(pts.get(i)); }
+        String csv = sc.toString();
+        long end = System.currentTimeMillis() + ms, lastLaunch = 0;
+        boolean cleaned = false;                        // เคลียร์กล่องเก่าในแอพแล้วหรือยัง
+        int delTries = 0, mismatch = 0, addClicks = 0, backs = 0;
+        int[] tries = new int[pts.size()], ft = new int[pts.size()];
+        while (System.currentTimeMillis() < end) {
+            AccessibilityNodeInfo root = appRoot();
+            if (!inApp(root)) {
+                lastLaunch = relaunch(lastLaunch);
+                if (lastLaunch < 0) return "robot app not found";
+                sleep(500); continue;
+            }
+            if ("estop".equals(specialState(allTexts()))) return "busy: estop";
+            boolean hdr = find(root, "~" + UNSELECTED) != null;
+            boolean twoBtn = find(root, "ยกเลิก") != null && find(root, "ตกลง") != null;
+
+            if (!cleaned && (hdr || twoBtn)) {          // หน้าต่างค้างจากครั้งก่อน หรือถามยืนยันลบกล่อง
+                AccessibilityNodeInfo c = hdr ? find(root, "ยกเลิก") : find(root, "ตกลง");
+                if (c != null) click(c);
+                sleep(700); continue;
+            }
+            if (cleaned && (hdr || twoBtn)) {           // หน้าต่าง "กรุณาเลือกจุดเป้าหมาย"
+                String r = fillDialog(root, pts, tries, ft);
+                if (r.startsWith("err:")) return r.substring(4);
+                continue;
+            }
+            if (find(root, ADD_BOX) != null) {          // หน้ารายการกล่อง
+                AccessibilityNodeInfo hint = find(root, PICK_HINT);
+                ArrayList<AccessibilityNodeInfo> fb = new ArrayList<AccessibilityNodeInfo>();
+                collectBoxes(root, fb);
+                if (!cleaned) {                         // ลบกล่องเก่าที่ค้างอยู่ก่อน กันหุ่นไปจุดเก่าด้วย
+                    AccessibilityNodeInfo anchor = hint != null ? hint : (fb.isEmpty() ? null : fb.get(0));
+                    if (anchor == null) { cleaned = true; continue; }
+                    if (++delTries > 8) return "ลบกล่องเดิมในแอพไม่ได้ (เปิด /dump ดูปุ่มลบ)";
+                    AccessibilityNodeInfo d = rightmostBtn(anchor);
+                    if (d == null) return "ไม่พบปุ่มลบกล่องเดิม (เปิด /dump ดู)";
+                    click(d); sleep(800); continue;
+                }
+                if (hint != null) { click(hint); sleep(900); continue; }                 // กล่องว่าง -> เปิดหน้าเลือกจุด
+                if (fb.isEmpty()) {                                                      // ยังไม่มีกล่อง -> เพิ่มกล่องใหม่
+                    if (++addClicks > 4) return "เพิ่มกล่องแล้วไม่เจอช่องเลือกจุด (เปิด /dump ดู)";
+                    click(find(root, ADD_BOX)); sleep(900); continue;
+                }
+                if (!boxMatches(root, pts)) {                                            // กล่องไม่ตรงที่ขอ -> ลบแล้วทำใหม่
+                    if (++mismatch > 2) return "กล่องในแอพไม่ตรงกับจุดที่เลือก (เปิด /dump ดู)";
+                    cleaned = false; delTries = 0; continue;
+                }
+                AccessibilityNodeInfo b = findAny(root, startKeys());
+                if (b != null && b.isEnabled()) { click(b); return "sent to " + csv; }
+                sleep(300); continue;
+            }
+            if (find(root, MULTI_TILE) != null && find(root, "ตรงไป") != null) {      // หน้าเมนูหลัก
+                click(find(root, MULTI_TILE)); sleep(1200); continue;
+            }
+            if (find(root, "ตรงไป") != null && backs < 3 && findAny(root, startKeys()) != null) {   // อยู่หน้าตรงไป -> ย้อนกลับ
+                backs++; performGlobalAction(GLOBAL_ACTION_BACK); sleep(1000); continue;
+            }
+            sleep(300);
+        }
+        return "timeout (เปิด /dump ดูว่าหน้าจออยู่ขั้นไหน)";
+    }
+
+    /** ในหน้าต่างเลือกจุด: กดเลือกจุดที่ยังไม่ได้เลือกทีละจุดตามลำดับ ครบแล้วกด ตกลง */
+    String fillDialog(AccessibilityNodeInfo root, ArrayList<String> pts, int[] tries, int[] ft) {
+        for (int i = 0; i < pts.size(); i++) {
+            String p = pts.get(i);
+            int st = ptState(root, p);
+            if (st == 1) continue;
+            if (st < 0) {                                        // ไม่เจอในชั้นนี้ -> ลองสลับชั้น
+                if (switchFloor(root, ft, i)) return "";
+                return "err:ไม่พบจุด " + p + " ในหน้าเลือกจุดของหุ่น (สแกนจุดใหม่ หรือเช็กชื่อจุด)";
+            }
+            if (++tries[i] > 4) return "err:กดเลือกจุด " + p + " ไม่สำเร็จ (เปิด /dump ดูปุ่ม +)";
+            AccessibilityNodeInfo n = unselectedNode(root, p);
+            boolean ok = false;
+            if (n != null) {
+                if (tries[i] % 2 == 1) {                         // ครั้งคี่: ลองกดปุ่ม + ก่อน ครั้งคู่: กดที่ตัวจุดเลย
+                    AccessibilityNodeInfo plus = nearestBtn(n);
+                    if (plus != null) ok = click(plus);
+                }
+                if (!ok) ok = click(n);
+            }
+            sleep(700);
+            return "";
+        }
+        AccessibilityNodeInfo okb = find(root, "ตกลง");
+        if (okb != null && click(okb)) { sleep(900); return "ok"; }
+        return "";
+    }
+
+    /** 1 = เลือกแล้ว (อยู่เหนือหัวข้อ "ยังไม่ได้เลือก"), 0 = ยังไม่ได้เลือก, -1 = ไม่เจอจุดนี้บนจอ */
+    int ptState(AccessibilityNodeInfo root, String p) {
+        ArrayList<AccessibilityNodeInfo> l = new ArrayList<AccessibilityNodeInfo>();
+        findAll(root, nk(p), l);
+        if (l.isEmpty()) return -1;
+        AccessibilityNodeInfo h = find(root, "~" + UNSELECTED);
+        if (h == null) return 1;
+        int ht = bounds(h).top;
+        for (AccessibilityNodeInfo n : l) if (bounds(n).top > ht) return 0;
+        return 1;
+    }
+    AccessibilityNodeInfo unselectedNode(AccessibilityNodeInfo root, String p) {
+        ArrayList<AccessibilityNodeInfo> l = new ArrayList<AccessibilityNodeInfo>();
+        findAll(root, nk(p), l);
+        AccessibilityNodeInfo h = find(root, "~" + UNSELECTED);
+        for (AccessibilityNodeInfo n : l) if (h == null || bounds(n).top > bounds(h).top) return n;
+        return null;
+    }
+    boolean switchFloor(AccessibilityNodeInfo root, int[] ft, int i) {
+        ArrayList<AccessibilityNodeInfo> fl = new ArrayList<AccessibilityNodeInfo>();
+        collectMatch(root, "ชั้น\\d+", fl);
+        if (ft[i] >= fl.size()) return false;
+        click(fl.get(ft[i]++)); sleep(700);
+        return true;
+    }
+    void collectBoxes(AccessibilityNodeInfo n, ArrayList<AccessibilityNodeInfo> out) { collectMatch(n, "กล่อง\\d+", out); }
+    void collectMatch(AccessibilityNodeInfo n, String regex, ArrayList<AccessibilityNodeInfo> out) {
+        if (n == null) return;
+        if (nk(n.getText()).matches(regex)) out.add(n);
+        for (int i = 0; i < n.getChildCount(); i++) collectMatch(n.getChild(i), regex, out);
+    }
+    /** กล่อง 1 แสดง "A、F" -> เทียบว่าตรงกับจุดที่ขอครบพอดี */
+    boolean boxMatches(AccessibilityNodeInfo root, ArrayList<String> pts) {
+        ArrayList<String> t = new ArrayList<String>();
+        texts(root, t);
+        for (String x : t) {
+            ArrayList<String> seg = new ArrayList<String>();
+            for (String s : x.split("[、,，;/|]+")) seg.add(nk(s));
+            boolean all = true;
+            for (String p : pts) if (!seg.contains(nk(p))) all = false;
+            if (all && seg.size() == pts.size()) return true;
+        }
+        return false;
+    }
+
+    // ---- ตัวช่วยหาปุ่มไอคอน (+ / −) ที่ไม่มีข้อความ
+    static int screenW(AccessibilityNodeInfo n) {
+        while (n.getParent() != null) n = n.getParent();
+        int w = bounds(n).width();
+        return w > 0 ? w : 1000;
+    }
+    static Rect bounds(AccessibilityNodeInfo n) { Rect r = new Rect(); n.getBoundsInScreen(r); return r; }
+    void findAll(AccessibilityNodeInfo n, String key, ArrayList<AccessibilityNodeInfo> out) {
+        if (n == null) return;
+        if (nk(n.getText()).equals(key) || nk(n.getContentDescription()).equals(key)) out.add(n);
+        for (int i = 0; i < n.getChildCount(); i++) findAll(n.getChild(i), key, out);
+    }
+    void collectBtns(AccessibilityNodeInfo n, AccessibilityNodeInfo skip, ArrayList<AccessibilityNodeInfo> out) {
+        if (n == null) return;
+        if (n.isClickable() && !hasText(n) && !n.equals(skip)) out.add(n);
+        for (int i = 0; i < n.getChildCount(); i++) collectBtns(n.getChild(i), skip, out);
+    }
+    /** ปุ่มไอคอนที่อยู่ใกล้ข้อความนี้ที่สุด (ปุ่ม + มุมขวาบนของจุด) */
+    AccessibilityNodeInfo nearestBtn(AccessibilityNodeInfo anchor) {
+        Rect a = bounds(anchor);
+        long cap = (long) (screenW(anchor) * 0.18);            // ปุ่ม + ต้องอยู่ใกล้ตัวจุดเท่านั้น กันไปกดปุ่มอื่นของหน้า
+        AccessibilityNodeInfo par = anchor.getParent();
+        for (int up = 0; up < 3 && par != null; up++, par = par.getParent()) {
+            ArrayList<AccessibilityNodeInfo> c = new ArrayList<AccessibilityNodeInfo>();
+            collectBtns(par, anchor, c);
+            AccessibilityNodeInfo best = null; long bd = Long.MAX_VALUE;
+            for (AccessibilityNodeInfo x : c) {
+                Rect r = bounds(x);
+                long dx = r.centerX() - a.centerX(), dy = r.centerY() - a.centerY();
+                long d = dx * dx + dy * dy;
+                if (dx < -cap / 8 || d > cap * cap) continue;     // + อยู่มุมขวาบนของจุด
+                if (d < bd) { bd = d; best = x; }
+            }
+            if (best != null) return best;
+        }
+        return null;
+    }
+    /** ปุ่มไอคอนทางขวาของแถวเดียวกับข้อความนี้ (ปุ่ม − ลบกล่อง) */
+    AccessibilityNodeInfo rightmostBtn(AccessibilityNodeInfo anchor) {
+        Rect a = bounds(anchor);
+        long cap = (long) (screenW(anchor) * 0.12);            // ต้องอยู่แถวเดียวกับข้อความ
+        AccessibilityNodeInfo par = anchor.getParent();
+        for (int up = 0; up < 3 && par != null; up++, par = par.getParent()) {
+            ArrayList<AccessibilityNodeInfo> c = new ArrayList<AccessibilityNodeInfo>();
+            collectBtns(par, anchor, c);
+            AccessibilityNodeInfo best = null; long bdy = Long.MAX_VALUE; int bx = -1;
+            for (AccessibilityNodeInfo x : c) {
+                Rect r = bounds(x);
+                if (r.centerX() <= a.centerX()) continue;
+                long dy = Math.abs(r.centerY() - a.centerY());
+                if (dy > cap) continue;
+                if (dy < bdy || (dy == bdy && r.centerX() > bx)) { bdy = dy; bx = r.centerX(); best = x; }
+            }
+            if (best != null) return best;
+        }
+        return null;
+    }
+
     // ---------------------------------------------------------------- อ่านรายชื่อจุด
     String points(Context ctx) {
         if (!LOCK.tryLock()) return "{\"ok\":false,\"msg\":\"busy\"}";
@@ -228,6 +447,7 @@ public class RobotAccessibilityService extends AccessibilityService {
                     if (lastLaunch < 0) return "{\"ok\":false,\"msg\":\"robot app not found\"}";
                     sleep(500); continue;
                 }
+                if (!"diner".equals(mode) && find(root, ADD_BOX) != null) { performGlobalAction(GLOBAL_ACTION_BACK); sleep(900); continue; }   // ค้างหน้าสั่งหลายจุด
                 if (findAny(root, startKeys()) != null) {          // อยู่หน้าเลือกจุดแล้ว
                     ArrayList<String> out = new ArrayList<String>();
                     collect(root, out);
@@ -276,7 +496,7 @@ public class RobotAccessibilityService extends AccessibilityService {
         boolean estop = false, dock = false, chg = false;
         for (String x : all) {
             String n = norm(x);
-            if (n.contains("emergency") || n.contains("ฉุกเฉิน") || n.contains("e-stop")) estop = true;
+            if (n.contains("emergency") || n.contains("ฉุกเฉิน") || n.contains("ถูกถ่ายภาพ") || n.contains("e-stop")) estop = true;
             if (n.contains("กำลังจับคู่") || n.contains("มาถึงเสาชาร์จ") || n.contains("pairing")) dock = true;
             if (n.contains("charging") || n.contains("กำลังชาร์จ") || n.contains("หยุดชาร์จ")) chg = true;
         }
