@@ -30,7 +30,7 @@ public class RobotAccessibilityService extends AccessibilityService {
     static String[] startKeys() {
         return "diner".equals(mode)
             ? new String[] { "Start", "เริ่ม", "เริ่มต้น", "การออกตัวแบบด่วน", "~ออกตัว" }
-            : new String[] { "เริ่มทำงาน" };
+            : new String[] { "เริ่มทำงาน", "start working" };
     }
 
     /** หาแอพจากชื่อไอคอน: DINERBOT (T9) ก่อน ถ้าไม่มีค่อยหา Industry */
@@ -86,9 +86,9 @@ public class RobotAccessibilityService extends AccessibilityService {
         if (!LOCK.tryLock()) return "busy: robot is running another command";
         try {
             if (appPkg == null && launchIntent(this) == null) return "robot app not found";
-            if (!"diner".equals(mode)) return "return not supported for this robot type";
             String sp = specialState(allTexts());
             if (sp.length() > 0) return "busy: " + sp;
+            if (!"diner".equals(mode)) return returnIndustry();   // S100
             long end = System.currentTimeMillis() + 25000, lastLaunch = 0, lastWake = 0;
             int wakes = 0;
             while (System.currentTimeMillis() < end) {
@@ -117,6 +117,72 @@ public class RobotAccessibilityService extends AccessibilityService {
             }
             return "timeout (หุ่นไม่ได้อยู่หน้าเลือกจุด)";
         } finally { LOCK.unlock(); }
+    }
+
+    static final String[] INDUSTRY_RETURN_KEYS = { "back" };   // S100 ภาษาอังกฤษ: ปุ่มลูกศรมุมขวาบนเขียนว่า back (ภาษาไทยมีแต่ไอคอนลูกศร)
+
+    /** S100: กดปุ่มลูกศรมุมขวาบน (back / ไอคอนลูกศร) ให้หุ่นกลับจุดพัก ทำได้จากหน้าเมนูหลัก / ตรงไป / หลายจุด */
+    String returnIndustry() {
+        long end = System.currentTimeMillis() + 25000, lastLaunch = 0, lastWake = 0;
+        int wakes = 0;
+        while (System.currentTimeMillis() < end) {
+            AccessibilityNodeInfo root = appRoot();
+            if (!inApp(root)) {
+                lastLaunch = relaunch(lastLaunch);
+                if (lastLaunch < 0) return "robot app not found";
+                sleep(500); continue;
+            }
+            if (!hasText(root) && allTexts().isEmpty() && wakes < 3 && System.currentTimeMillis() - lastWake > 3000) {
+                wake(root); wakes++; lastWake = System.currentTimeMillis(); continue;
+            }
+            boolean hdr = find(root, "~" + UNSELECTED) != null;
+            boolean twoBtn = find(root, "ยกเลิก") != null && find(root, "ตกลง") != null;
+            if (hdr || twoBtn) {                                   // มีหน้าต่างเลือกจุด/ยืนยันค้างอยู่ -> ยกเลิกก่อน
+                AccessibilityNodeInfo c = find(root, "ยกเลิก");
+                if (c != null) click(c);
+                sleep(700); continue;
+            }
+            boolean onMenu = find(root, "ตรงไป") != null || find(root, MULTI_TILE) != null
+                || find(root, ADD_BOX) != null || findAny(root, startKeys()) != null;
+            if (onMenu) {
+                AccessibilityNodeInfo b = findAny(root, INDUSTRY_RETURN_KEYS);   // อังกฤษ: มีคำว่า back
+                if (b == null) b = returnIconBtn(root);                           // ไทย: ไอคอนลูกศรไม่มีข้อความ
+                if (b != null && click(b)) {
+                    long end2 = System.currentTimeMillis() + 4000;                // ถ้ามีหน้าต่างถามยืนยันให้กดยืนยันเอง
+                    while (System.currentTimeMillis() < end2) {
+                        sleep(400);
+                        AccessibilityNodeInfo r2 = appRoot();
+                        if (r2 == null) continue;
+                        if (find(r2, "ยกเลิก") != null) {
+                            AccessibilityNodeInfo ok = find(r2, "ตกลง");
+                            if (ok != null && click(ok)) return "sent return (confirmed)";
+                        }
+                        AccessibilityNodeInfo cf = findAny(r2, CONFIRM_KEYS);
+                        if (cf != null && click(cf)) return "sent return (confirmed)";
+                    }
+                    return "sent return";
+                }
+            }
+            sleep(300);
+        }
+        return "timeout (ไม่พบปุ่มลูกศรกลับจุดพัก มุมขวาบน เปิด /dump ดู)";
+    }
+
+    /** ไอคอนลูกศรมุมขวาบน (ไม่มีข้อความ): ปุ่มที่กดได้ไม่มีตัวอักษร อยู่ครึ่งขวา-ส่วนบนของจอ เลือกอันซ้ายสุด (ขวาของมันในหน้าเมนูหลักคือปุ่มตั้งค่า) */
+    AccessibilityNodeInfo returnIconBtn(AccessibilityNodeInfo root) {
+        Rect rr = bounds(root);
+        int w = rr.width(), h = rr.height();
+        if (w <= 0 || h <= 0) return null;
+        ArrayList<AccessibilityNodeInfo> c = new ArrayList<AccessibilityNodeInfo>();
+        collectBtns(root, null, c);
+        AccessibilityNodeInfo best = null; int bx = Integer.MAX_VALUE;
+        for (AccessibilityNodeInfo x : c) {
+            Rect r = bounds(x);
+            if (r.centerX() < rr.left + w * 0.70 || r.centerY() > rr.top + h * 0.25) continue;
+            if (r.width() > w * 0.3) continue;
+            if (r.centerX() < bx) { bx = r.centerX(); best = x; }
+        }
+        return best;
     }
 
     String runOnce(String pointsCsv, String floor, long ms) {
@@ -351,12 +417,12 @@ public class RobotAccessibilityService extends AccessibilityService {
     }
     boolean switchFloor(AccessibilityNodeInfo root, int[] ft, int i) {
         ArrayList<AccessibilityNodeInfo> fl = new ArrayList<AccessibilityNodeInfo>();
-        collectMatch(root, "ชั้น\\d+", fl);
+        collectMatch(root, "(ชั้น|floor)\\d+", fl);
         if (ft[i] >= fl.size()) return false;
         click(fl.get(ft[i]++)); sleep(700);
         return true;
     }
-    void collectBoxes(AccessibilityNodeInfo n, ArrayList<AccessibilityNodeInfo> out) { collectMatch(n, "กล่อง\\d+", out); }
+    void collectBoxes(AccessibilityNodeInfo n, ArrayList<AccessibilityNodeInfo> out) { collectMatch(n, "(กล่อง|box)\\d+", out); }
     void collectMatch(AccessibilityNodeInfo n, String regex, ArrayList<AccessibilityNodeInfo> out) {
         if (n == null) return;
         if (nk(n.getText()).matches(regex)) out.add(n);
@@ -483,11 +549,14 @@ public class RobotAccessibilityService extends AccessibilityService {
         String n = norm(t);
         for (String k : startKeys()) if (norm(k).equals(n)) return true;
         for (String k : OK_KEYS) if (norm(k).equals(n)) return true;
-        return n.equals("ตรงไป") || n.equals("beverage") || n.equals("return") || n.equals("กลับ")
+        return n.equals("ตรงไป") || n.equals("หลายจุด") || n.equals("วงจร")
+            || n.equals("direct") || n.equals("multipoint") || n.equals("cycle")
+            || n.equals("back") || n.equals("set up") || n.equals("setup") || n.equals("cancel") || n.equals("sure")
+            || n.equals("beverage") || n.equals("return") || n.equals("กลับ")
             || n.equals("idle") || n.equals("operating") || n.equals("ว่าง")
             || n.equals("การใช้งานล่าสุด") || n.equals("ตำแหน่งทุกจุด")
             || n.matches("l\\d+|\\d+l") || ("diner".equals(mode) && n.matches("\\d+"))
-            || n.startsWith("ชั้น") || n.contains("%") || n.matches("\\d+\\s*s") || n.matches(".*\\d{1,2}:\\d{2}.*");
+            || n.startsWith("ชั้น") || n.startsWith("floor") || n.contains("%") || n.matches("\\d+\\s*s") || n.matches(".*\\d{1,2}:\\d{2}.*");
     }
 
     // ---------------------------------------------------------------- สถานะ / กด OK (T9 ถึงจุดแล้ว)
@@ -496,7 +565,7 @@ public class RobotAccessibilityService extends AccessibilityService {
         boolean estop = false, dock = false, chg = false;
         for (String x : all) {
             String n = norm(x);
-            if (n.contains("emergency") || n.contains("ฉุกเฉิน") || n.contains("ถูกถ่ายภาพ") || n.contains("e-stop")) estop = true;
+            if (n.contains("emergency") || n.contains("ฉุกเฉิน") || n.contains("ถูกถ่ายภาพ") || n.contains("e-stop") || n.contains("motor unlocking")) estop = true;
             if (n.contains("กำลังจับคู่") || n.contains("มาถึงเสาชาร์จ") || n.contains("pairing")) dock = true;
             if (n.contains("charging") || n.contains("กำลังชาร์จ") || n.contains("หยุดชาร์จ")) chg = true;
         }
@@ -570,9 +639,30 @@ public class RobotAccessibilityService extends AccessibilityService {
         return c == null ? "" : c.toString().replace('\u00a0', ' ').trim().replaceAll("\\s+", " ").toLowerCase();
     }
     static String nk(CharSequence c) { return norm(c).replace(" ", ""); }
+    /** ข้อความภาษาอังกฤษของแอพ S100 (Industry) ที่ตรงกับข้อความภาษาไทยแต่ละคำ */
+    static final java.util.HashMap<String, String[]> EN = new java.util.HashMap<String, String[]>();
+    static {
+        EN.put("ตรงไป", new String[] { "DIRECT" });
+        EN.put("หลายจุด", new String[] { "MULTIPOINT" });
+        EN.put("เพิ่มกล่องใหม่", new String[] { "add a new box" });
+        EN.put("กรุณาเลือกจุดเป้าหมาย", new String[] { "please select a target point" });
+        EN.put("ยังไม่ได้เลือกจุดเป้าหมาย", new String[] { "target point not selected" });
+        EN.put("ยกเลิก", new String[] { "Cancel" });
+        EN.put("ตกลง", new String[] { "Sure", "OK" });
+        EN.put("เริ่มทำงาน", new String[] { "start working" });
+    }
+    /** หาโหนดจากข้อความ (ไทยหรืออังกฤษก็ได้ ขึ้นต้นด้วย ~ = ข้อความมีคำนี้อยู่) */
     AccessibilityNodeInfo find(AccessibilityNodeInfo n, String t) {
-        if (t.startsWith("~")) return findC(n, nk(t.substring(1)));
-        return findN(n, nk(t));
+        boolean contains = t.startsWith("~");
+        String base = contains ? t.substring(1) : t;
+        AccessibilityNodeInfo r = contains ? findC(n, nk(base)) : findN(n, nk(base));
+        if (r != null) return r;
+        String[] alt = EN.get(base);
+        if (alt != null) for (String a : alt) {
+            r = contains ? findC(n, nk(a)) : findN(n, nk(a));
+            if (r != null) return r;
+        }
+        return null;
     }
     AccessibilityNodeInfo findAny(AccessibilityNodeInfo n, String[] keys) {
         for (String k : keys) { AccessibilityNodeInfo r = find(n, k); if (r != null) return r; }
