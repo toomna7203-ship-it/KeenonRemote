@@ -438,7 +438,7 @@ function render() {
   $('title').textContent = cur ? (cur.name || cur.ip) : 'ยังไม่มีหุ่น';
   var ps = $('psub'); ps.textContent = '';
   if (cur) { if (cur.name) ps.textContent = cur.ip + (modelTxt(cur) ? '  ' : ''); if (modelTxt(cur)) ps.appendChild(el('span', 'mtag', modelTxt(cur))); }
-  $('retbtn').style.display = (cur && cur.mode === 'diner') ? '' : 'none';
+  $('retbtn').style.display = (cur && (cur.mode === 'diner' || cur.mode === 'industry')) ? '' : 'none';
   $('manage').style.display = cur ? '' : 'none';
   $('rename').style.display = cur ? '' : 'none';
   $('quick').style.display = cur ? '' : 'none';
@@ -748,7 +748,7 @@ function renderGroup() {
   var cl = el('button', 'btn', 'ล้างที่เลือก'); cl.disabled = !sel.length;
   cl.onclick = function () { picks[gk] = []; renderGroup(); };
   act.appendChild(call); act.appendChild(cl);
-  if (groupMode === 'diner') {
+  if (groupMode === 'diner' || groupMode === 'industry') {
     var rt = el('button', 'btn'); rt.appendChild(ico('home')); rt.appendChild(document.createTextNode('ส่งคันที่ว่างกลับจุดพัก (1 คัน)')); rt.disabled = !!queue;
     rt.onclick = function () { callGroup(['กลับจุดพัก'], 'return'); };
     act.appendChild(rt);
