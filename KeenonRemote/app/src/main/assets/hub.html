@@ -679,9 +679,10 @@ function isFree(r) {
     if (ld0 && !((busySeen[r.ip] || 0) > ld0) && Date.now() - ld0 < 600000) return false;
   }
   if (st.state === 'ready') return !!st.idle;
-  if (st.state === 'sleep') {            // หน้าจอพัก/หน้าหุ่น: ถือว่าว่างถ้าเรายังไม่ได้สั่งงานตั้งแต่เห็นว่างล่าสุด หรือสั่งไปนานแล้ว
-    var ld = lastDispatch[r.ip] || 0;
-    return !ld || (lastReady[r.ip] || 0) > ld || Date.now() - ld > 240000;
+  if (st.state === 'sleep') {            // หน้าจอหน้าหุ่น (ตาการ์ตูน) = หุ่นกำลังวิ่งทำงาน ไม่ว่าง
+    // จะนับว่าว่างก็ต่อเมื่อเคยเห็นหน้าเมนู "ว่าง" หลังสั่งงานล่าสุด (งานจบแล้วกลับมาพัก)
+    var ld = lastDispatch[r.ip] || 0, lr = lastReady[r.ip] || 0;
+    return lr > 0 && lr > ld;
   }
   return false;
 }
@@ -694,6 +695,7 @@ function robotLabel(r) {
   if (arrivals[r.ip] !== null && arrivals[r.ip] !== undefined) return ['รอกด OK', 'wait'];
   if (!st) return ['ไม่ทราบสถานะ', ''];
   if (isFree(r)) return [st.state === 'sleep' ? 'ว่าง (หน้าจอพัก)' : 'ว่าง', 'free'];
+  if (st.state === 'sleep') return ['กำลังวิ่งทำงาน (หน้าจอหน้าหุ่น)', ''];
   return ['กำลังทำงาน', ''];
 }
 function battEl(pct) {
